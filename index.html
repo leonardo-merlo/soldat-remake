@@ -352,7 +352,7 @@ const WEAPONS = [
   { name: 'HK MP5', kick: .05, short: 'MP5', mult: 1.01, delay: 6, mag: 30, reload: 105, speed: 18.9, spread: .14, moveAcc: 0, push: .0112, mods: [1.1, .95, .85], auto: true, img: 'mp5', fire: 'mp5-fire', cx: .15, cy: .6, fx: -.65, fy: .85 },
   { name: 'Ak-74', kick: .08, short: 'AK-74', mult: 1.11, delay: 11, mag: 40, reload: 150, speed: 24, spread: .09, moveAcc: 0, push: .014, mods: [1.1, .95, .85], auto: true, img: 'ak74', fire: 'ak74-fire', cx: .15, cy: .5, fx: -.37, fy: .8 },
   { name: 'Steyr AUG', kick: .06, short: 'AUG', mult: .71, delay: 7, mag: 25, reload: 125, speed: 26, spread: .075, moveAcc: 0, push: .0084, mods: [1.1, .95, .85], auto: true, img: 'steyraug', fire: 'steyraug-fire', cx: .2, cy: .6, fx: -.24, fy: .75 },
-  { name: 'Spas-12', kick: 1.6, short: 'Spas', mult: 1.22, delay: 32, mag: 7, reload: 175, speed: 14, spread: .8, moveAcc: 0, push: .0188, mods: [1.1, .95, .85], auto: false, pellets: 6, img: 'spas12', fire: 'spas12-fire', cx: .1, cy: .6, fx: -.2, fy: .9 },
+  { name: 'Spas-12', kick: 0.95, short: 'Spas', mult: 1.22, delay: 32, mag: 7, reload: 175, speed: 14, spread: .8, moveAcc: 0, push: .0188, mods: [1.1, .95, .85], auto: false, pellets: 6, img: 'spas12', fire: 'spas12-fire', cx: .1, cy: .6, fx: -.2, fy: .9 },
   { name: 'Ruger 77', kick: .6, short: 'Ruger', mult: 2.49, delay: 39, mag: 4, reload: 84, speed: 33, spread: 0, moveAcc: .03, push: .012, mods: [1.2, 1.05, 1], auto: false, img: 'ruger77', fire: 'ruger77-fire', cx: .1, cy: .7, fx: -.35, fy: .85 },
   { name: 'M79', kick: 1, short: 'M79', mult: 1550, delay: 6, mag: 1, reload: 178, speed: 10.7, spread: 0, moveAcc: 0, push: .036, mods: [1.15, 1, .9], auto: false, kind: 'tube', explosive: { r: 64 }, img: 'm79', fire: 'm79-fire', cx: .1, cy: .7, fx: -.4, fy: .8 },
   { name: 'Barrett M82A1', kick: 2, short: 'Barrett', mult: 4.45, delay: 225, mag: 10, reload: 70, speed: 55, spread: 0, moveAcc: .05, push: .018, mods: [1, 1, 1], auto: false, kind: 'sniper', startup: 19, img: 'barretm82', fire: 'barret-fire', cx: .15, cy: .7, fx: -.15, fy: .8 },
@@ -433,7 +433,7 @@ let tick = 0;
 function makeSoldier(name, col, x, y, isBot, id) {
   return { id, name, col, C: palette(col), isBot, x, y, tx: x, ty: y, vx: 0, vy: 0, hp: MAX_HEALTH, jet: START_JET, jetting: false, stance: 'stand', wantProne: false, onGround: false, aim: 0, facing: 1,
     wi: 2, lastWi: 0, rollT: -1, rollDir: 1, flipT: -1, jumpDir: 0, flipPending: false, lastKillT: -999, streak: 0, ammo: WEAPONS.map(w => w.mag), reloadT: 0, fireT: 0, startT: 0, flashT: 0, jumpT: -1, dead: false, respawnT: 0, protect: 60, anim: 0, kills: 0, deaths: 0,
-    grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0, hasKnife: true, throwT: 0, flipCool: 0, reloadStart: 0,
+    grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0, hasKnife: true, throwT: 0, flipCool: 0, reloadStart: 0, flipDir: 0, slideT: 0, prevFacing: 0,
     input: {}, ai: { timer: 0, strafe: 1, pref: 250, seen: 0, err: 0, errT: 0, jetting: false, crouch: false, nadeT: 0 } };
 }
 let player = makeSoldier('Você', COLORS[0], 640, 980, false, 'h');
@@ -513,9 +513,13 @@ function updateSoldier(e) {
   // aim
   const sh = shoulder(e);
   e.aim = Math.atan2(inp.aimY - sh.y, inp.aimX - sh.x); e.facing = Math.cos(e.aim) >= 0 ? 1 : -1;
+  if (e.stance === 'prone' && e.onGround && e.prevFacing && e.prevFacing !== e.facing && e.gCharge < 0 && !inp.grenadeHeld && e.slideT <= 0) e.wantProne = false;
+  e.prevFacing = e.facing;
   // run / crouch-run / crawl (Soldat ground friction: 0.97 standing, 0.85 crouched, instant stop when idle)
   const dir = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
+  if (e.slideT > 0) e.slideT--;
   if (e.rollT >= 0 && e.onGround) { e.vx += e.rollDir * 0.098; e.vx *= 0.99; }
+  else if (e.slideT > 0 && e.onGround) e.vx *= 0.985; // prone-cancel slide keeps its momentum
   else if (e.onGround && e.jumpT < 0) {
     if (dir) {
       if (e.stance === 'stand') { e.vx += dir * RUNSPEED; e.vx *= 0.97; }
@@ -531,14 +535,19 @@ function updateSoldier(e) {
   }
   if (e.jumpT >= 0) {
     e.jumpT++;
-    if (e.jumpT === 9) { if (e.jumpDir) e.vx += e.jumpDir * JUMPDIRSPEED; if (e.flipPending) e.flipT = 0; }
-    if (e.jumpT > 8 && e.jumpT < 15) e.vy -= JUMPSPEED;
+    if (e.jumpT === 9 && e.flipPending) { e.flipT = 0; e.flipDir = dir || -e.facing; }
+    if (e.jumpT > 8 && e.jumpT < 15) {
+      // running jump: less lift, more forward push (Soldat's side jump goes further than it goes up)
+      if (e.jumpDir) { e.vy -= JUMPSPEED * 0.62; e.vx += e.jumpDir * JUMPDIRSPEED * 0.3; }
+      else e.vy -= JUMPSPEED;
+    }
     if (e.jumpT >= 15) e.jumpT = -1;
   }
   // mid-air: W + backwards + jetpack -> quick backflip that reverses the jump's momentum
   if (e.flipCool > 0) e.flipCool--;
-  if (!e.onGround && e.flipT < 0 && e.flipCool <= 0 && inp.jet && inp.jumpHeld && dir !== 0 && dir !== e.facing) {
-    e.flipT = 0; e.flipCool = 40;
+  const movingDir = Math.abs(e.vx) > 0.5 ? Math.sign(e.vx) : 0;
+  if (!e.onGround && e.flipT < 0 && e.flipCool <= 0 && inp.jet && inp.jumpHeld && dir !== 0 && (movingDir ? dir !== movingDir : dir !== e.facing)) {
+    e.flipT = 0; e.flipCool = 40; e.flipDir = dir;
     e.vx = dir * Math.max(1.6, Math.abs(e.vx) * 0.5); e.vy = Math.min(e.vy, 0) - 1.2;
   }
   if (e.flipT >= 0 && ++e.flipT > 24) e.flipT = -1;
@@ -553,7 +562,9 @@ function updateSoldier(e) {
     jetFx(e);
   } else if (e.jet < START_JET && (e.onGround || tick % 2 === 0)) e.jet++;
   e.vy += GRAV;
+  const airborne = !e.onGround;
   moveSoldier(e);
+  if (airborne && e.onGround && e.stance === 'prone' && Math.abs(e.vx) > 1.2 && (e.gCharge >= 0 || inp.grenadeHeld) && Math.sign(e.vx) !== e.facing) e.slideT = 70;
   e.vx *= DAMP; e.vy *= DAMP;
   if (e.onGround && Math.abs(e.vx) > 0.2) e.anim += Math.abs(e.vx) * 0.11; // ~20 frames per stride at top speed
   // weapons
@@ -1135,22 +1146,37 @@ function drawLanternLights() {
     ctx.fillStyle = g; ctx.fillRect(ex - 70, ey - 70, 140, 140);
   }
 }
-// aurora ribbons over the sky, behind the mountains
-function drawAurora() {
-  const t = performance.now() / 1000, base = SH * 0.13 + (600 - cam.y) * 0.02 * Z, off = cam.x * 0.02 * Z;
-  const edge = (x, ph) => base + Math.sin((x + off) / (SW * .18) + t * .25 + ph) * SH * .04 + Math.sin((x + off) / (SW * .07) - t * .4 + ph * 2) * SH * .015;
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  for (const [col, ph, a] of [['60,255,170', 0, 1], ['120,140,255', 2.1, .7], ['80,230,220', 4.2, .55]]) {
-    const g = ctx.createLinearGradient(0, base - SH * .1, 0, base + SH * .22);
-    g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(.35, `rgba(${col},${.24 * a})`); g.addColorStop(.65, `rgba(${col},${.09 * a})`); g.addColorStop(1, `rgba(${col},0)`);
-    ctx.fillStyle = g; ctx.beginPath();
-    for (let x = 0; x <= SW + 16; x += 16) { const y = edge(x, ph) - SH * .08; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
-    for (let x = SW + 16; x >= 0; x -= 16) ctx.lineTo(x, edge(x, ph) + SH * .2);
-    ctx.fill();
-    // faint vertical curtain rays
-    ctx.fillStyle = `rgba(${col},${.035 * a})`;
-    for (let i = 0; i < 26; i++) { const x = ((i * 97 + off * (1 + ph * .1)) % (SW + 40) + SW + 40) % (SW + 40) - 20, y = edge(x, ph); ctx.fillRect(x, y - SH * .06, 3, SH * (.12 + .06 * Math.sin(t + i))); }
+// aurora: soft colourful curtains drawn on a small canvas, blurred, then scaled up over the sky
+let auroraCv = null, auroraT = -1;
+const AURORA_BANDS = [['60,255,150', 0, 1, .55], ['40,220,230', 1.7, .8, .5], ['150,110,255', 3.3, .7, .42], ['255,95,200', 4.9, .45, .36]];
+function renderAurora() {
+  const aw = 240, ah = 110;
+  if (!auroraCv) auroraCv = mkCanvas(aw, ah);
+  const g = auroraCv.getContext('2d'), t = performance.now() / 1000;
+  g.clearRect(0, 0, aw, ah);
+  g.globalCompositeOperation = 'lighter';
+  for (const [col, ph, a, base] of AURORA_BANDS) {
+    for (let x = 0; x < aw; x += 2) {
+      const u = x / aw;
+      // irregular lower edge and height so the top never reads as a straight line
+      const yb = ah * (base + .16 * Math.sin(u * 5.1 + t * .18 + ph) + .07 * Math.sin(u * 13.7 - t * .33 + ph * 1.7));
+      const hgt = ah * (.22 + .16 * Math.sin(u * 7.3 + t * .27 + ph * .6) + .1 * Math.sin(u * 21 + t * .5 + ph));
+      const k = a * (.5 + .5 * Math.sin(u * 9 + t * .4 + ph)) * (.6 + .4 * Math.sin(u * 31 + t * 1.3 + ph * 2));
+      for (let j = 0; j < 4; j++) { g.fillStyle = `rgba(${col},${(.2 - j * .04) * k})`; g.fillRect(x, yb - hgt * (j + 1) / 4, 2, hgt / 4 + 1); }
+    }
   }
+  g.globalCompositeOperation = 'source-over';
+  // blur in place for the smoky look
+  const tmp = mkCanvas(aw, ah), tg = tmp.getContext('2d');
+  tg.filter = 'blur(5px)'; tg.drawImage(auroraCv, 0, 0); tg.filter = 'blur(2px)'; tg.drawImage(auroraCv, 0, 0);
+  g.clearRect(0, 0, aw, ah); g.drawImage(tmp, 0, 0);
+}
+function drawAurora() {
+  if (tick !== auroraT && tick % 3 === 0 || !auroraCv) { renderAurora(); auroraT = tick; }
+  const off = (cam.x * 0.02 * Z) % SW, y = -SH * .04 + (600 - cam.y) * 0.02 * Z;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .9;
+  ctx.drawImage(auroraCv, -off, y, SW * 1.02, SH * .6);
+  ctx.drawImage(auroraCv, SW - off - 2, y, SW * 1.02, SH * .6);
   ctx.restore();
 }
 // low fog drifting over the lake (pre-rendered soft blobs, scrolled with the wind)
@@ -1377,7 +1403,7 @@ function drawSoldier(e) {
   const la = Math.atan2(Math.sin(e.aim), Math.cos(e.aim) * f);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   const fwd = Math.sign(e.vx) * f; // +1 moving the way we face
-  if (e.flipT >= 0) { ctx.translate(0, -12); ctx.rotate(-Math.PI * 2 * e.flipT / 24); ctx.translate(0, 12); }
+  if (e.flipT >= 0) { ctx.translate(0, -12); ctx.rotate((e.flipDir || -f) * f * Math.PI * 2 * e.flipT / 24); ctx.translate(0, 12); }
   else if (e.rollT >= 0) { ctx.translate(0, -8); ctx.rotate(e.rollDir * f * Math.PI * 2 * e.rollT / 30); ctx.translate(0, 8); }
   else if (e.stance === 'stand' && !e.onGround && e.jumpDir && e.jumpDir === e.facing && !e.jetting) { ctx.translate(0, -13); ctx.rotate(0.35 * e.jumpDir * f); ctx.translate(0, 13); }
   else if (e.stance === 'stand' && e.onGround) { ctx.translate(0, -13); ctx.rotate(0.13 * fwd * Math.min(1, Math.abs(e.vx) / 2.85)); ctx.translate(0, 13); }
@@ -1702,7 +1728,7 @@ function packSoldier(e) {
     hp: r2(e.hp), jet: e.jet, wi: e.wi, am: e.ammo[e.wi], reloadT: e.reloadT, dead: e.dead, respawnT: e.respawnT, rollT: e.rollT, rollDir: e.rollDir,
     flipT: e.flipT, jumpDir: e.jumpDir, jumpT: e.jumpT, onGround: e.onGround, jetting: e.jetting, anim: r2(e.anim), protect: e.protect,
     kills: e.kills, deaths: e.deaths, grenades: e.grenades, gCharge: e.gCharge, startT: e.startT,
-    hasKnife: e.hasKnife, throwT: e.throwT, reloadStart: e.reloadStart,
+    hasKnife: e.hasKnife, throwT: e.throwT, reloadStart: e.reloadStart, flipDir: e.flipDir,
     rag: e.dead && e.rag ? e.rag.flatMap(q => [r2(q.x), r2(q.y)]) : null };
 }
 function hostSend() {
