@@ -5,3 +5,6 @@ assets/bg/forest-mountains.png
 
 .claude/
 .vercel/
+
+.vercel
+.env*
