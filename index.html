@@ -380,6 +380,7 @@ const WEAPONS = [
   { name: 'Barrett M82A1', kick: 2, short: 'Barrett', mult: 4.45, delay: 225, mag: 10, reload: 70, speed: 55, spread: 0, moveAcc: .05, push: .018, mods: [1, 1, 1], auto: false, kind: 'sniper', startup: 19, img: 'barretm82', fire: 'barret-fire', cx: .15, cy: .7, fx: -.15, fy: .8 },
   { name: 'FN Minimi', kick: .08, short: 'Minimi', mult: .85, delay: 9, mag: 50, reload: 250, speed: 27, spread: .064, moveAcc: .013, push: .0128, mods: [1.1, .95, .85], auto: true, img: 'm249', fire: 'm249-fire', cx: .15, cy: .6, fx: -.2, fy: .9 },
   { name: 'XM214 Minigun', kick: .2, short: 'Minigun', mult: .468, delay: 3, mag: 100, reload: 480, speed: 29, spread: .3, moveAcc: .0625, push: .0104, mods: [1.1, .95, .85], auto: true, kind: 'minigun', startup: 25, img: 'minigun', fire: 'minigun-fire', cx: .05, cy: .5, fx: -.2, fy: .45 },
+  { name: 'Bumerangue', kick: 0, short: 'Bumerangue', mult: 0, delay: 20, mag: 1, reload: 1, speed: 9.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'boomerang', img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
 ];
 const GRENADE = { mult: 1500, r: 85, fuse: 180 };
 
@@ -399,6 +400,7 @@ function loadImage(key, paths, tries = 3) {
   img.src = paths[0];
 }
 for (const w of WEAPONS) {
+  if (!w.img) continue; // drawn by code (boomerang)
   loadImage(w.img, [`assets/weapons/${w.img}.png`, `assets/original/weapons/${w.img}.png`]);
   loadImage(w.fire, [`assets/weapons/${w.fire}.png`, `assets/original/weapons/${w.fire}.png`]);
 }
@@ -455,7 +457,7 @@ let tick = 0;
 function makeSoldier(name, col, x, y, isBot, id) {
   return { id, name, col, C: palette(col), isBot, x, y, tx: x, ty: y, vx: 0, vy: 0, hp: MAX_HEALTH, jet: START_JET, jetting: false, stance: 'stand', wantProne: false, onGround: false, aim: 0, facing: 1,
     wi: 2, lastWi: 0, rollT: -1, rollDir: 1, flipT: -1, jumpDir: 0, flipPending: false, lastKillT: -999, streak: 0, ammo: WEAPONS.map(w => w.mag), reloadT: 0, fireT: 0, startT: 0, flashT: 0, jumpT: -1, dead: false, respawnT: 0, protect: 60, anim: 0, kills: 0, deaths: 0,
-    grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0, hasKnife: true, throwT: 0, armor: 0, flipCool: 0, reloadStart: 0, flipDir: 0, slideT: 0, prevFacing: 0,
+    grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0, hasKnife: true, hasBoom: true, throwT: 0, armor: 0, flipCool: 0, reloadStart: 0, flipDir: 0, slideT: 0, prevFacing: 0,
     input: {}, ai: { timer: 0, strafe: 1, pref: 250, seen: 0, err: 0, errT: 0, jetting: false, crouch: false, nadeT: 0 } };
 }
 let player = makeSoldier('Você', COLORS[0], 640, 980, false, 'h');
@@ -594,6 +596,10 @@ function updateSoldier(e) {
   if (e.fireT > 0) e.fireT--;
   if (e.reloadT > 0 && --e.reloadT === 0) e.ammo[e.wi] = WEAPONS[e.wi].mag;
   const wn = WEAPONS[e.wi];
+  if (wn.kind === 'boomerang') {
+    e.ammo[e.wi] = e.hasBoom ? 1 : 0; e.reloadT = 0;
+    if (inp.fire && inp.firePressed && e.fireT <= 0 && e.hasBoom) { throwBoomerang(e); e.fireT = wn.delay; }
+  } else {
   if (inp.reload && e.reloadT <= 0 && e.ammo[e.wi] < wn.mag) startReload(e, wn);
   if (inp.fire && e.fireT <= 0 && e.reloadT > 0 && (wn.auto || inp.firePressed)) {
     const loaded = reloadedAmmo(e);
@@ -606,6 +612,7 @@ function updateSoldier(e) {
   }
   if (!inp.fire && !(wn.startup && !wn.auto && e.startT > 0)) e.startT = 0;
   if (e.ammo[e.wi] <= 0 && e.reloadT <= 0 && e.fireT <= 0) startReload(e, wn);
+  }
   // grenades: hold to charge, release to throw
   if (e.gCool > 0) e.gCool--;
   if (e.grenades < 3 && ++e.gT > 480) { e.grenades++; e.gT = 0; }
@@ -627,13 +634,68 @@ function updateSoldier(e) {
 function reloadedAmmo(e) { const w = WEAPONS[e.wi]; return e.reloadT > 0 ? e.reloadStart + Math.floor((1 - e.reloadT / w.reload) * (w.mag - e.reloadStart)) : e.ammo[e.wi]; }
 function startReload(e, w) { e.reloadT = w.reload; e.reloadStart = Math.max(0, e.ammo[e.wi]); }
 
+// ================= Boomerang =================
+// Flies out, curves back to the thrower and can be caught; hits each enemy once per flight (on the way out or back).
+// Hitting a wall drops it; anyone without one picks it up by walking over it.
+const boomerangs = [];
+function throwBoomerang(e) {
+  e.hasBoom = false; e.throwT = 14;
+  const s = shoulder(e), c = Math.cos(e.aim), sn = Math.sin(e.aim);
+  boomerangs.push({ x: s.x + c * 6, y: s.y + sn * 6, vx: c * 9.5 + e.vx * .5, vy: sn * 9.5 + e.vy * .5, r: 0, owner: e, fly: true, age: 0, hit: [] });
+  knifeFx(s.x, s.y); emit({ t: 'kthrow', x: s.x, y: s.y });
+}
+function updateBoomerangs() {
+  for (let i = boomerangs.length - 1; i >= 0; i--) {
+    const m = boomerangs[i], o = m.owner;
+    if (m.fly) {
+      m.age++; m.r += 0.55;
+      if (m.age > 14 && o && !o.dead) {
+        // pull back toward the thrower's chest, a bit harder as it gets older
+        // steer toward the thrower (blend velocity toward a homing vector, so it never orbits)
+        const tx = o.x - m.x, ty = o.y - 14 - m.y, d = Math.hypot(tx, ty) || 1, k = Math.min(0.12, 0.05 + m.age * 0.0012);
+        m.vx += (tx / d * 10 - m.vx) * k; m.vy += (ty / d * 10 - m.vy) * k;
+        if (d < 18) { o.hasBoom = true; boomerangs.splice(i, 1); pickFx(o, 'boom'); continue; }
+      } else m.vy += 0.04;
+      const sp = Math.hypot(m.vx, m.vy); if (sp > 10) { m.vx *= 10 / sp; m.vy *= 10 / sp; }
+      if (m.age > 300 || (o && o.dead && m.age > 14)) { m.fly = false; m.vx *= .3; continue; }
+      const steps = Math.max(1, Math.ceil(Math.hypot(m.vx, m.vy) / 4));
+      for (let st = 0; st < steps && m.fly; st++) {
+        m.x += m.vx / steps; m.y += m.vy / steps;
+        if (m.x < 0 || m.x > W || m.y > H) { m.fly = false; break; }
+        if (solid(m.x, m.y)) { m.x -= m.vx / steps; m.y -= m.vy / steps; m.fly = false; m.vx *= -0.2; m.vy = 0; impactFx(m.x, m.y, 0, 0); emit({ t: 'imp', x: m.x, y: m.y, vx: 0, vy: 0 }); break; }
+        for (const t of soldiers) {
+          if (t === o || t.dead || m.hit.includes(t)) continue;
+          const [w, h] = dims(t);
+          if (Math.abs(m.x - t.x) < w / 2 + 4 && m.y > t.y - h - 4 && m.y < t.y + 2) { m.hit.push(t); hurt(t, 80, o, 'Bumerangue', m.x, m.y, Math.sign(m.vx) || 1, 0); }
+        }
+      }
+      continue;
+    }
+    if (!solid(m.x, m.y + 1)) { m.vy = Math.min(m.vy + GRAV * 2, 6); m.y += m.vy; m.x += m.vx; while (solid(m.x, m.y)) { m.y--; m.vy = 0; m.vx = 0; } }
+    else m.vx = 0;
+    for (const t of soldiers) {
+      if (t.dead || t.hasBoom) continue;
+      const [, h] = dims(t);
+      if (Math.abs(t.x - m.x) < 11 && m.y > t.y - h - 4 && m.y - 6 < t.y + 2) { t.hasBoom = true; boomerangs.splice(i, 1); pickFx(t, 'boom'); emit({ t: 'pick', id: t.id, kind: 'boom' }); break; }
+    }
+  }
+}
+function drawBoomerangShape() {
+  ctx.fillStyle = '#8a5a2e'; ctx.strokeStyle = '#4a2e14'; ctx.lineWidth = .6;
+  ctx.beginPath(); ctx.moveTo(-7, 3); ctx.quadraticCurveTo(-3, -4, 0, -2.2); ctx.quadraticCurveTo(3, -4, 7, 3); ctx.lineTo(5.4, 3.8); ctx.quadraticCurveTo(2.5, -1, 0, .2); ctx.quadraticCurveTo(-2.5, -1, -5.4, 3.8); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#c9883f'; ctx.fillRect(-.8, -2, 1.6, 1.6);
+}
+function drawBoomerangs() {
+  for (const m of boomerangs) { ctx.save(); ctx.translate(m.x, m.y - (m.fly ? 0 : 3)); ctx.rotate(m.fly ? m.r : 0); ctx.scale(1.3, 1.3); drawBoomerangShape(); ctx.restore(); }
+}
+
 // ================= Throwing knife =================
 // One knife per soldier: thrown with F, kills on hit, then lies on the ground until someone without a knife walks over it.
 const knives = [];
 function throwKnife(e) {
   e.hasKnife = false; e.throwT = 14;
   const s = shoulder(e), c = Math.cos(e.aim), sn = Math.sin(e.aim);
-  knives.push({ x: s.x + c * 6, y: s.y + sn * 6, vx: c * 15 + e.vx * .5, vy: sn * 15 + e.vy * .5, r: e.aim, owner: e, fly: true, life: 3600 });
+  knives.push({ x: s.x + c * 6, y: s.y + sn * 6, vx: c * 11 + e.vx * .5, vy: sn * 11 + e.vy * .5, r: e.aim, owner: e, fly: true, life: 3600 });
   knifeFx(s.x, s.y); emit({ t: 'kthrow', x: s.x, y: s.y });
 }
 function knifeFx(x, y) { noise(.12, 1800, volAt(x, y) * .5, 'bandpass'); }
@@ -642,7 +704,8 @@ function updateKnives() {
     const k = knives[i];
     if (--k.life <= 0) { knives.splice(i, 1); continue; }
     if (k.fly) {
-      k.vy += BULLET_GRAV * 0.6; k.r += 0.45;
+      k.vy += 0.16; k.vx *= 0.985; k.vy *= 0.985; k.r += 0.45;
+      if (Math.hypot(k.vx, k.vy) < 2.5) { k.fly = false; continue; } // out of steam: it just drops
       const steps = Math.max(1, Math.ceil(Math.hypot(k.vx, k.vy) / 4));
       for (let st = 0; st < steps && k.fly; st++) {
         k.x += k.vx / steps; k.y += k.vy / steps;
@@ -652,7 +715,7 @@ function updateKnives() {
           if (t === k.owner || t.dead) continue;
           const [w, h] = dims(t);
           if (Math.abs(k.x - t.x) < w / 2 + 2 && k.y > t.y - h - 2 && k.y < t.y + 1) {
-            hurt(t, 400, k.owner, 'Faca', k.x, k.y, Math.sign(k.vx) || 1, 0);
+            hurt(t, Math.hypot(k.vx, k.vy) * 18, k.owner, 'Faca', k.x, k.y, Math.sign(k.vx) || 1, 0); // ~200 at full speed, less when slow
             k.fly = false; k.vx = 0; k.vy = 0; break;
           }
         }
@@ -794,7 +857,7 @@ function dropWeapon(e) {
 function respawn(e) {
   e.rag = null; e.rollT = -1; e.flipT = -1; e.jumpDir = 0;
   e.dead = false; e.hp = MAX_HEALTH; e.jet = START_JET; e.vx = 0; e.vy = 0; e.protect = 70; e.reloadT = 0; e.fireT = 10; e.startT = 0;
-  e.ammo = WEAPONS.map(w => w.mag); e.grenades = 3; e.stance = 'stand'; e.wantProne = false; e.hasKnife = true; e.throwT = 0; e.armor = 0;
+  e.ammo = WEAPONS.map(w => w.mag); e.grenades = 3; e.stance = 'stand'; e.wantProne = false; e.hasKnife = true; e.hasBoom = true; e.throwT = 0; e.armor = 0;
   if (e.isBot) e.wi = BOT_WEAPONS[Math.random() * BOT_WEAPONS.length | 0];
   unstick(e);
 }
@@ -1060,7 +1123,7 @@ function applyPickup(t, kind) {
 }
 function pickFx(t, kind) {
   if (!t) return;
-  if (t === player) bigMsg = { text: kind === 'health' ? '+ VIDA' : kind === 'ammo' ? '+ MUNIÇÃO' : kind === 'knife' ? '+ FACA' : kind === 'vest' ? '+ COLETE' : kind === 'fuel' ? '+ COMBUSTÍVEL' : '+ GRANADAS', t: 90 };
+  if (t === player) bigMsg = { text: kind === 'health' ? '+ VIDA' : kind === 'ammo' ? '+ MUNIÇÃO' : kind === 'knife' ? '+ FACA' : kind === 'boom' ? '+ BUMERANGUE' : kind === 'vest' ? '+ COLETE' : kind === 'fuel' ? '+ COMBUSTÍVEL' : '+ GRANADAS', t: 90 };
   noise(.08, 2500, volAt(t.x, t.y) * .4, 'bandpass');
 }
 function damageCrate(k, dmg) {
@@ -1253,7 +1316,7 @@ function step() {
     s.acc = {};
   }
   for (const s of soldiers) { updateSoldier(s); groundFx(s); }
-  updateBullets(); updateKnives(); updateLivingWorld(); updateParticles();
+  updateBullets(); updateKnives(); updateBoomerangs(); updateLivingWorld(); updateParticles();
   frameTail();
   if (netMode === 'host' && tick % 2 === 0) hostSend();
 }
@@ -1334,6 +1397,7 @@ function drawWorld() {
   ctx.globalAlpha = 1;
   drawLivingWorld();
   drawKnives();
+  drawBoomerangs();
   for (const s of soldiers) if (s.dead) drawSoldier(s);
   for (const s of soldiers) if (!s.dead) drawSoldier(s);
   const gi = IMG['frag-grenade'];
@@ -1412,7 +1476,9 @@ function gunAndArms(sx, sy, la, w, C, e) {
   ctx.save(); ctx.translate(sx, sy); ctx.rotate(la); ctx.translate(throwPose(e) * 5, 0);
   const K = BODY_SCALE, hand = HAND / K, img = IMG[w.img];
   ctx.strokeStyle = C.dark; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(hand + 7, 2); ctx.stroke();
-  if (ready(img)) {
+  if (w.kind === 'boomerang') {
+    if (e.hasBoom) { ctx.save(); ctx.translate(hand + 2, 0); ctx.rotate(-.6); ctx.scale(1.3 / K, 1.3 / K); drawBoomerangShape(); ctx.restore(); }
+  } else if (ready(img)) {
     const gw = img.naturalWidth * PX / K, gh = img.naturalHeight * PX / K;
     ctx.drawImage(img, hand - w.cx * gw, -w.cy * gh, gw, gh);
     const fi = IMG[w.fire];
@@ -1772,7 +1838,7 @@ function packSoldier(e) {
     hp: r2(e.hp), jet: e.jet, wi: e.wi, am: e.ammo[e.wi], reloadT: e.reloadT, dead: e.dead, respawnT: e.respawnT, rollT: e.rollT, rollDir: e.rollDir,
     flipT: e.flipT, jumpDir: e.jumpDir, jumpT: e.jumpT, onGround: e.onGround, jetting: e.jetting, anim: r2(e.anim), protect: e.protect,
     kills: e.kills, deaths: e.deaths, grenades: e.grenades, gCharge: e.gCharge, startT: e.startT,
-    hasKnife: e.hasKnife, throwT: e.throwT, armor: r2(e.armor), reloadStart: e.reloadStart, flipDir: e.flipDir,
+    hasKnife: e.hasKnife, hasBoom: e.hasBoom, throwT: e.throwT, armor: r2(e.armor), reloadStart: e.reloadStart, flipDir: e.flipDir,
     rag: e.dead && e.rag ? e.rag.flatMap(q => [r2(q.x), r2(q.y)]) : null };
 }
 function hostSend() {
@@ -1783,7 +1849,8 @@ function hostSend() {
     ic: ICICLES.map(c => c.state === 1 ? Math.round(c.dy) + 1 : c.state === 0 ? 0 : -1 - Math.round(c.regrow)),
     cr: CRATES.map(k => k.alive ? (k.hitT > 0 ? 2 : 1) : 0),
     pk: pickups.map(q => [r2(q.x), r2(q.y), PICKUP_KINDS.indexOf(q.kind), q.life]),
-    kn: knives.map(q => [r2(q.x), r2(q.y), r2(q.r), q.fly ? 1 : 0]), ev: netEvents.splice(0) };
+    kn: knives.map(q => [r2(q.x), r2(q.y), r2(q.r), q.fly ? 1 : 0]),
+    bm: boomerangs.map(q => [r2(q.x), r2(q.y), r2(q.r), q.fly ? 1 : 0]), ev: netEvents.splice(0) };
   for (const c of conns) if (c.open) c.send(msg);
 }
 
@@ -1824,6 +1891,7 @@ function applySnapshot(m) {
   for (const g of m.g) grenades.push({ x: g[0], y: g[1], r: g[2], fuse: 99 });
   if (m.ic) ICICLES.forEach((c, i) => { const v = m.ic[i]; if (v == null) return; if (v === 0) { c.state = 0; c.dy = 0; } else if (v > 0) { c.state = 1; c.dy = v - 1; } else { c.state = 2; c.regrow = -1 - v; } });
   if (m.cr) CRATES.forEach((k, i) => { const v = m.cr[i]; if (v == null) return; k.alive = v > 0; k.hitT = v === 2 ? 6 : 0; });
+  if (m.bm) { boomerangs.length = 0; for (const q of m.bm) boomerangs.push({ x: q[0], y: q[1], r: q[2], fly: !!q[3], vx: 0, vy: 0, hit: [] }); }
   if (m.kn) { knives.length = 0; for (const q of m.kn) knives.push({ x: q[0], y: q[1], r: q[2], fly: !!q[3], vx: 0, vy: 0, life: 99 }); }
   if (m.pk) { pickups.length = 0; for (const q of m.pk) pickups.push({ x: q[0], y: q[1], kind: PICKUP_KINDS[q[2]] || 'ammo', life: q[3], vy: 0 }); }
   const byId = id => soldiers.find(q => q.id === id);
