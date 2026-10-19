@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Soldat Remake — Protótipo</title>
+<title>Soldat Remake</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   html,body{margin:0;height:100%;background:#0b1020;overflow:hidden;font-family:Rajdhani,system-ui,sans-serif}
@@ -15,14 +16,33 @@
   #overlay table{border-collapse:collapse;width:100%;font-size:18px}
   #overlay td{padding:3px 8px;border-bottom:1px solid rgba(160,180,255,.1)}
   #overlay td:first-child{color:#ffd27a;font-weight:700;white-space:nowrap}
-  #overlay button{margin-top:18px;width:100%;padding:12px;font:700 22px Rajdhani,sans-serif;letter-spacing:2px;color:#0b1020;background:#ffd27a;border:0;border-radius:8px;cursor:pointer}
+  #overlay button{margin-top:12px;width:100%;padding:12px;font:700 22px Rajdhani,sans-serif;letter-spacing:2px;color:#0b1020;background:#ffd27a;border:0;border-radius:8px;cursor:pointer}
+  #overlay button.alt{background:transparent;color:#ffd27a;border:2px solid #ffd27a}
+  #overlay [hidden]{display:none}
+  #overlay label{display:block;font-size:16px;color:#aab4d6;margin-bottom:6px}
+  #nick{width:100%;box-sizing:border-box;padding:10px 12px;font:600 20px Rajdhani,sans-serif;color:#e8ecf8;background:rgba(255,255,255,.06);border:1px solid rgba(160,180,255,.3);border-radius:8px}
+  #colors{display:flex;gap:10px;margin:12px 0 4px;flex-wrap:wrap}
+  #colors button{width:36px;height:36px;margin:0;padding:0;border-radius:50%;border:3px solid transparent}
+  #colors button.on{border-color:#fff;box-shadow:0 0 0 2px #0b1020 inset}
+  #room{margin-top:14px;padding:12px;border:1px dashed rgba(255,210,122,.5);border-radius:8px;font-size:17px}
+  #room code{display:block;margin:6px 0;padding:8px;background:rgba(0,0,0,.35);border-radius:6px;font-size:15px;word-break:break-all;color:#ffd27a}
+  #overlay details{margin-top:14px}
+  #overlay summary{cursor:pointer;color:#aab4d6;font-size:16px}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="overlay"><div class="box">
-  <h1>SOLDAT · PROTÓTIPO</h1>
-  <p>Campo de testes: 10 armas, 1 bot, renascimento no local da morte.</p>
+  <h1>SOLDAT REMAKE</h1>
+  <p id="lobby-sub">Escolha seu nome e sua cor.</p>
+  <label for="nick">Nome</label>
+  <input id="nick" maxlength="12" autocomplete="off">
+  <div id="colors"></div>
+  <button id="join" hidden>ENTRAR NA SALA</button>
+  <button id="play">TREINAR COM BOT</button>
+  <button id="host" class="alt">CRIAR SALA (JOGAR COM AMIGO)</button>
+  <div id="room" hidden></div>
+  <details><summary>Controles</summary>
   <table>
     <tr><td>A / D</td><td>Andar</td></tr>
     <tr><td>W</td><td>Pular</td></tr>
@@ -35,9 +55,9 @@
     <tr><td>1–0 / roda / Q</td><td>Trocar arma / arma anterior</td></tr>
     <tr><td>R</td><td>Recarregar</td></tr>
     <tr><td>G (segurar e soltar)</td><td>Granada: quanto mais segura, mais longe vai</td></tr>
-    <tr><td>T</td><td>Modo do bot: ativo → só anda → alvo parado</td></tr>
+    <tr><td>T</td><td>Modo do bot (só no treino): ativo → só anda → alvo parado</td></tr>
   </table>
-  <button id="play">JOGAR</button>
+  </details>
   <p style="margin:14px 0 0;font-size:13px">Armas e explosão: arte original do Soldat © Transhuman Design, licença CC BY 4.0.</p>
 </div></div>
 <script>
@@ -401,20 +421,22 @@ const GRAV = 0.06, DAMP = 0.99;
 const RUNSPEED = 0.118, CROUCHRUNSPEED = RUNSPEED / 0.6, FLYSPEED = 0.03, JUMPSPEED = 0.66, JUMPDIRSPEED = 0.30, JETSPEED = 0.10;
 const MAX_HEALTH = 150, START_JET = 190, BULLET_GRAV = GRAV * 2.25, MAX_INACCURACY = 0.5;
 const BODY_SCALE = 0.72; // drawn soldier ~24 units tall, like Soldat's gostek
-const TEAM = [
-  { main: '#2f6bff', dark: '#1a3a99', dark2: '#14296b', light: '#6a95ff' },
-  { main: '#e0393b', dark: '#8c1b1d', dark2: '#661214', light: '#ff6b63' },
-];
+const COLORS = ['#2f6bff', '#e0393b', '#2fb35a', '#f2a033', '#9b59d6', '#1fbfbf', '#f2d23a', '#e8e8e8'];
+function mixHex(a, b, k) { const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16), ch = s => Math.round(((pa >> s) & 255) * (1 - k) + ((pb >> s) & 255) * k); return `rgb(${ch(16)},${ch(8)},${ch(0)})`; }
+function palette(hex) { return { main: hex, dark: mixHex(hex, '#000000', .45), dark2: mixHex(hex, '#000000', .6), light: mixHex(hex, '#ffffff', .3) }; }
 let tick = 0;
-function makeSoldier(name, team, x, y, isBot) {
-  return { name, team, isBot, x, y, vx: 0, vy: 0, hp: MAX_HEALTH, jet: START_JET, jetting: false, stance: 'stand', wantProne: false, onGround: false, aim: 0, facing: 1,
+function makeSoldier(name, col, x, y, isBot, id) {
+  return { id, name, col, C: palette(col), isBot, x, y, tx: x, ty: y, vx: 0, vy: 0, hp: MAX_HEALTH, jet: START_JET, jetting: false, stance: 'stand', wantProne: false, onGround: false, aim: 0, facing: 1,
     wi: 2, lastWi: 0, rollT: -1, rollDir: 1, flipT: -1, jumpDir: 0, flipPending: false, lastKillT: -999, streak: 0, ammo: WEAPONS.map(w => w.mag), reloadT: 0, fireT: 0, startT: 0, flashT: 0, jumpT: -1, dead: false, respawnT: 0, protect: 60, anim: 0, kills: 0, deaths: 0,
     grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0,
     input: {}, ai: { timer: 0, strafe: 1, pref: 250, seen: 0, err: 0, errT: 0, jetting: false, crouch: false, nadeT: 0 } };
 }
-const player = makeSoldier('Você', 0, 640, 980, false);
-const bot = makeSoldier('Bot', 1, 2600, groundH(2600) - 3, true);
+let player = makeSoldier('Você', COLORS[0], 640, 980, false, 'h');
+const bot = makeSoldier('Bot', COLORS[1], 2600, groundH(2600) - 3, true, 'b');
 const soldiers = [player, bot];
+let netMode = 'solo'; // 'solo' (with bot) | 'host' | 'guest'
+const netEvents = [];
+function emit(ev) { if (netMode === 'host') netEvents.push(ev); }
 let botMode = 0; const BOT_MODES = ['ativo', 'só anda', 'alvo parado'];
 const bullets = [], grenades = [], particles = [], feed = [];
 let shakeAmt = 0, bigMsg = null;
@@ -510,11 +532,7 @@ function updateSoldier(e) {
     if (e.onGround) e.vy -= 2.5 * JETSPEED;
     else if (e.stance === 'prone') e.vx += e.facing * JETSPEED / 2;
     else e.vy -= JETSPEED;
-    if (Math.random() < 0.7) {
-      const bx = e.x - 4 * e.facing, by = e.y - (e.stance === 'crouch' ? 4 : 7);
-      particles.push({ t: 'jet', x: bx + rnd(-1, 1), y: by, vx: rnd(-.3, .3) + e.vx * .2, vy: rnd(1, 2), life: 30, max: 30, s: 2 });
-      if (tick % 4 === 0) particles.push({ t: 'smoke', x: bx, y: by + 4, vx: rnd(-.3, .3), vy: rnd(.3, .7), life: 40, max: 40, s: 1.8, jet: true });
-    }
+    jetFx(e);
   } else if (e.jet < START_JET && (e.onGround || tick % 2 === 0)) e.jet++;
   e.vy += GRAV;
   moveSoldier(e);
@@ -549,6 +567,12 @@ function updateSoldier(e) {
   }
 }
 
+function jetFx(e) {
+  if (Math.random() >= 0.7) return;
+  const bx = e.x - 4 * e.facing, by = e.y - (e.stance === 'crouch' ? 4 : 7);
+  particles.push({ t: 'jet', x: bx + rnd(-1, 1), y: by, vx: rnd(-.3, .3) + e.vx * .2, vy: rnd(1, 2), life: 30, max: 30, s: 2 });
+  if (tick % 4 === 0) particles.push({ t: 'smoke', x: bx, y: by + 4, vx: rnd(-.3, .3), vy: rnd(.3, .7), life: 40, max: 40, s: 1.8, jet: true });
+}
 function shoot(e, w) {
   e.ammo[e.wi]--; e.fireT = w.delay; e.flashT = 3;
   const s = shoulder(e), c = Math.cos(e.aim), sn = Math.sin(e.aim);
@@ -568,32 +592,48 @@ function shoot(e, w) {
   } else if (w.pellets) {
     for (let k = 0; k < w.pellets; k++) add(mx, my, bx + (Math.random() * 2 - 1) * w.spread, by + (Math.random() * 2 - 1) * w.spread);
   } else add(mx, my, bx, by);
+  shotFx(e, w, mx, my, s.x, s.y, e.aim);
+  emit({ t: 'shot', id: e.id, wi: e.wi, mx, my, sx: s.x, sy: s.y, aim: e.aim });
+}
+function shotFx(e, w, mx, my, sx, sy, aim) {
+  const c = Math.cos(aim), sn = Math.sin(aim);
+  e.flashT = 3;
   if (e === player && (w.kind === 'sniper' || w.pellets || w.kind === 'tube')) shakeAmt = Math.max(shakeAmt, 2.5);
   particles.push({ t: 'flash', x: mx, y: my, life: 3, max: 3, s: w.kind === 'sniper' ? 7 : w.pellets ? 6 : 4 });
-  particles.push({ t: 'shell', x: s.x + c * 5, y: s.y + sn * 5, vx: -e.facing * rnd(-.4, 1.8) + e.vx * .5, vy: rnd(-2, .3) + e.vy * .5, life: 90, max: 90, s: 1, r: rnd(0, 6), vr: rnd(-.4, .4) });
+  particles.push({ t: 'shell', x: sx + c * 5, y: sy + sn * 5, vx: -e.facing * rnd(-.4, 1.8) + e.vx * .5, vy: rnd(-2, .3) + e.vy * .5, life: 90, max: 90, s: 1, r: rnd(0, 6), vr: rnd(-.4, .4) });
   if (w.kind === 'sniper' || w.pellets || w.kind === 'tube') for (let i = 0; i < 4; i++) particles.push({ t: 'smoke', x: mx, y: my, vx: c * rnd(.3, 1.2), vy: sn * rnd(.3, 1.2) - .2, life: 35, max: 35, s: 2.5 });
   sfxShot(w, mx, my);
 }
 
 function hurt(t, dmg, src, wname, hx, hy, dirx, diry) {
   if (t.dead || t.protect > 0) return;
-  t.hp -= dmg; t.hitFlash = 6;
+  t.hp -= dmg;
+  hitFx(t, src, hx, hy, dirx, diry);
+  emit({ t: 'hit', tgt: t.id, src: src && src.id, x: hx, y: hy, dx: dirx, dy: diry });
+  if (t.hp <= 0) {
+    makeRagdoll(t, dirx * 2.2, diry * 1.5 - 1);
+    t.hp = 0; t.dead = true; t.respawnT = 110; t.deaths++; t.wantProne = false; t.jumpT = -1; t.gCharge = -1;
+    if (src && src !== t) src.kills++;
+    killFx(t, src, wname, hx, hy, dirx);
+    t.stance = 'prone';
+    emit({ t: 'kill', tgt: t.id, src: src && src.id, wname, x: hx, y: hy, dx: dirx });
+  }
+}
+function hitFx(t, src, hx, hy, dirx, diry) {
+  if (t) t.hitFlash = 6;
   for (let i = 0, n = 2 + (Math.random() * 4 | 0); i < n; i++) particles.push({ t: 'blood', x: hx, y: hy, vx: dirx * rnd(1, 3) + rnd(-.6, .6), vy: diry * rnd(1, 2.5) + rnd(-1.5, 0.3), life: 70, max: 70, s: rnd(1.5, 2) });
   if (t === player) shakeAmt = Math.max(shakeAmt, 3);
   if (src === player && t !== player) { sfxHit(); hitMarker = 8; }
-  if (t.hp <= 0) {
-    makeRagdoll(t, dirx * 2.2, diry * 1.5 - 1);
-    dropWeapon(t);
-    t.hp = 0; t.dead = true; t.respawnT = 110; t.deaths++; t.stance = 'prone'; t.wantProne = false; t.jumpT = -1; t.gCharge = -1;
-    for (let i = 0; i < 34; i++) particles.push({ t: 'gore', x: hx + rnd(-6, 6), y: hy + rnd(-10, 8), vx: dirx * rnd(0, 1.5) + rnd(-1, 1), vy: rnd(-1.5, .5), life: rnd(40, 80), max: 80, s: rnd(3, 6) });
-    if (src && src !== t) src.kills++;
-    const wpn = WEAPONS.find(q => q.short === wname);
-    feed.push({ killer: src ? src.name : '?', kills: src ? src.kills : 0, victim: t.name, img: wpn ? wpn.img : 'frag-grenade', wname, life: 900 });
-    if (src === player && t !== player) {
-      player.streak = tick - player.lastKillT < 180 ? player.streak + 1 : 1; player.lastKillT = tick;
-      bigMsg = { text: player.streak === 2 ? 'DOUBLE KILL' : player.streak === 3 ? 'TRIPLE KILL' : player.streak > 3 ? 'MULTI KILL' : `Você matou ${t.name}`, t: 240 };
-    } else if (t === player) bigMsg = { text: src === t ? 'Você se explodiu' : `Morto por ${src ? src.name : '?'}`, t: 240 };
-  }
+}
+function killFx(t, src, wname, hx, hy, dirx) {
+  if (t) dropWeapon(t);
+  for (let i = 0; i < 34; i++) particles.push({ t: 'gore', x: hx + rnd(-6, 6), y: hy + rnd(-10, 8), vx: dirx * rnd(0, 1.5) + rnd(-1, 1), vy: rnd(-1.5, .5), life: rnd(40, 80), max: 80, s: rnd(3, 6) });
+  const wpn = WEAPONS.find(q => q.short === wname);
+  feed.push({ killer: src ? src.name : '?', kills: src ? src.kills : 0, victim: t ? t.name : '?', img: wpn ? wpn.img : 'frag-grenade', wname, life: 900 });
+  if (src === player && t !== player) {
+    player.streak = tick - player.lastKillT < 180 ? player.streak + 1 : 1; player.lastKillT = tick;
+    bigMsg = { text: player.streak === 2 ? 'DOUBLE KILL' : player.streak === 3 ? 'TRIPLE KILL' : player.streak > 3 ? 'MULTI KILL' : `Você matou ${t.name}`, t: 240 };
+  } else if (t === player) bigMsg = { text: src === t ? 'Você se explodiu' : `Morto por ${src ? src.name : '?'}`, t: 240 };
 }
 
 // Verlet ragdoll: 11 points joined by sticks, colliding with the terrain mask (Soldat corpses are skeletons too)
@@ -644,13 +684,20 @@ function respawn(e) {
 }
 
 // Soldat explosion: damage = mult / (distance + 1) to the nearest body part, inside the radius
-function explode(x, y, r, mult, src, wname) {
+function boomFx(x, y, r) {
   sfxBoom(x, y); shakeAmt = Math.max(shakeAmt, 10 * volAt(x, y) + 2);
   particles.push({ t: 'explosion', x, y, life: 32, max: 32 });
   particles.push({ t: 'boom', x, y, life: 10, max: 10, s: r * 0.9 });
   for (let i = 0; i < 18; i++) { const a = rnd(0, 6.28), sp = rnd(.5, 2); particles.push({ t: 'smoke', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - .6, life: rnd(60, 110), max: 110, s: rnd(4, 8) }); }
   for (let i = 0; i < 24; i++) { const a = rnd(0, 6.28), sp = rnd(3, 8); particles.push({ t: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rnd(14, 28), max: 28, s: 1 }); }
   for (let i = 0; i < 16; i++) particles.push({ t: 'snow', x: x + rnd(-10, 10), y: y + rnd(-6, 6), vx: rnd(-3, 3), vy: rnd(-4, -1), life: 50, max: 50, s: rnd(1.5, 3) });
+}
+function impactFx(x, y, vx, vy) {
+  for (let k = 0; k < 4; k++) particles.push({ t: 'puff', x, y, vx: -vx * .05 + rnd(-.6, .6), vy: -vy * .05 + rnd(-.8, .2), life: rnd(8, 14), max: 14, s: rnd(1, 2) });
+  for (let k = 0; k < 3; k++) particles.push({ t: 'snow', x, y, vx: rnd(-1, 1), vy: rnd(-2, -.3), life: 40, max: 40, s: rnd(1, 2.2) });
+}
+function explode(x, y, r, mult, src, wname) {
+  boomFx(x, y, r); emit({ t: 'boom', x, y, r });
   for (const t of soldiers) {
     if (t.dead) continue;
     const [, h] = dims(t);
@@ -676,10 +723,7 @@ function updateBullets() {
       if (b.x < -50 || b.x > W + 50 || b.y > H + 50 || b.y < -800) { dead = true; break; }
       if (solid(b.x, b.y)) {
         if (b.w.explosive) explode(b.x - b.vx / steps, b.y - b.vy / steps, b.w.explosive.r, b.w.mult, b.owner, b.w.short);
-        else {
-          for (let k = 0; k < 4; k++) particles.push({ t: 'puff', x: b.x, y: b.y, vx: -b.vx * .05 + rnd(-.6, .6), vy: -b.vy * .05 + rnd(-.8, .2), life: rnd(8, 14), max: 14, s: rnd(1, 2) });
-          for (let k = 0; k < 3; k++) particles.push({ t: 'snow', x: b.x, y: b.y, vx: rnd(-1, 1), vy: rnd(-2, -.3), life: 40, max: 40, s: rnd(1, 2.2) });
-        }
+        else { impactFx(b.x, b.y, b.vx, b.vy); emit({ t: 'imp', x: b.x, y: b.y, vx: b.vx, vy: b.vy }); }
         dead = true; break;
       }
       for (const t of soldiers) {
@@ -784,7 +828,7 @@ let wheelSwitch = 0, aimKick = 0, hitMarker = 0, running = false;
 addEventListener('keydown', e => {
   if (!keys[e.code]) pressed[e.code] = true; keys[e.code] = true;
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
-  if (e.code === 'KeyT' && running) botMode = (botMode + 1) % 3;
+  if (e.code === 'KeyT' && running && netMode === 'solo') botMode = (botMode + 1) % 3;
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.left = mouse.right = false; });
@@ -816,9 +860,19 @@ function step() {
   tick++;
   playerInput();
   for (const k in pressed) pressed[k] = false;
-  botThink(bot);
+  if (soldiers.includes(bot)) botThink(bot);
+  // remote players: latest held keys + one-shot presses accumulated since the last tick
+  for (const s of soldiers) if (s.remote) {
+    const i = s.netIn || {}, a = s.acc || {};
+    s.input = { ...i, jumpPressed: !!a.jumpPressed, pronePressed: !!a.pronePressed, firePressed: !!a.firePressed, grenadePressed: !!a.grenadePressed, crouchPressed: !!a.crouchPressed, switchTo: a.switchTo != null ? a.switchTo : null };
+    s.acc = {};
+  }
   for (const s of soldiers) updateSoldier(s);
   updateBullets(); updateParticles();
+  frameTail();
+  if (netMode === 'host' && tick % 2 === 0) hostSend();
+}
+function frameTail() {
   aimKick *= 0.85; if (hitMarker > 0) hitMarker--;
   for (const f of feed) f.life--; while (feed.length && feed[0].life <= 0) feed.shift(); if (feed.length > 4) feed.shift();
   if (bigMsg) bigMsg.t--;
@@ -975,7 +1029,7 @@ function gunAndArms(sx, sy, la, w, C, e) {
   ctx.restore();
 }
 function drawRagdoll(e) {
-  const C = TEAM[e.team], R = e.rag, seg = (a, b, c, col, wd) => { ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(R[a].x, R[a].y); ctx.lineTo(R[b].x, R[b].y); if (c != null) ctx.lineTo(R[c].x, R[c].y); ctx.stroke(); };
+  const C = e.C, R = e.rag, seg = (a, b, c, col, wd) => { ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(R[a].x, R[a].y); ctx.lineTo(R[b].x, R[b].y); if (c != null) ctx.lineTo(R[c].x, R[c].y); ctx.stroke(); };
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.globalAlpha = Math.min(1, e.respawnT / 20);
   seg(2, 5, 6, C.dark2, 2.6); seg(1, 9, 10, C.dark, 2);
@@ -987,7 +1041,7 @@ function drawRagdoll(e) {
 }
 function drawSoldier(e) {
   if (e.dead && e.rag) { drawRagdoll(e); return; }
-  const C = TEAM[e.team], f = e.facing, w = WEAPONS[e.wi];
+  const C = e.C, f = e.facing, w = WEAPONS[e.wi];
   ctx.save(); ctx.translate(e.x, e.y);
   if (e.dead) ctx.globalAlpha = 0.85; else if (e.protect > 0 && (e.protect >> 2) % 2) ctx.globalAlpha = 0.45;
   ctx.scale(f * BODY_SCALE, BODY_SCALE);
@@ -1081,7 +1135,7 @@ function drawHUD() {
   ctx.textAlign = 'left'; ctx.font = F(22);
   ctx.fillStyle = '#5be35b'; ctx.fillText(`${place}/${soldiers.length}`, X(1728), Y(958));
   ctx.fillStyle = '#e04040'; ctx.fillText(`${p.kills} (${p.kills - best >= 0 ? '+' + (p.kills - Math.max(...soldiers.filter(q => q !== p).map(q => q.kills))) : p.kills - best})`, X(1728), Y(980));
-  ctx.fillStyle = 'rgba(200,205,220,.7)'; ctx.font = F(16, 600); ctx.fillText(`bot: ${BOT_MODES[botMode]} (T)`, X(1728), Y(1003));
+  ctx.fillStyle = 'rgba(200,205,220,.7)'; ctx.font = F(16, 600); ctx.fillText(netMode === 'solo' ? `bot: ${BOT_MODES[botMode]} (T)` : netMode === 'host' ? `sala: ${roomId}` : 'online', X(1728), Y(1003));
   // kill feed (top right): green "Killer (kills)" over dark-red victim, weapon icon on the right
   feed.forEach((k, i) => {
     const y = Y(162 + i * 63); ctx.globalAlpha = Math.min(1, k.life / 60);
@@ -1147,7 +1201,7 @@ function render() {
 let last = performance.now(), acc = 0;
 function frame(t) {
   acc += Math.min(100, t - last); last = t;
-  if (running && worldCanvas) while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; } else acc = 0;
+  if (running && worldCanvas) while (acc >= 1000 / 60) { if (netMode === 'guest') guestStep(); else step(); acc -= 1000 / 60; } else acc = 0;
   render();
   requestAnimationFrame(frame);
 }
@@ -1161,11 +1215,167 @@ const bootStart = performance.now();
   buildWorld(); unstick(player); unstick(bot);
 })();
 mouse.x = SW * 0.7; mouse.y = SH * 0.5;
-document.getElementById('play').addEventListener('click', () => {
-  document.getElementById('overlay').style.display = 'none'; running = true;
-  if (!AC) initAudio(); else AC.resume();
+// ================= Lobby =================
+const $ = id => document.getElementById(id);
+let myName = '', myColor = COLORS[0], roomId = '';
+try { myName = localStorage.getItem('sr-name') || ''; myColor = localStorage.getItem('sr-color') || COLORS[0]; } catch (err) { /* storage blocked: use defaults */ }
+if (!COLORS.includes(myColor)) myColor = COLORS[0];
+$('nick').value = myName;
+COLORS.forEach(c => {
+  const b = document.createElement('button'); b.style.background = c; b.setAttribute('aria-label', 'cor ' + c);
+  if (c === myColor) b.classList.add('on');
+  b.onclick = () => { myColor = c; document.querySelectorAll('#colors button').forEach(q => q.classList.toggle('on', q === b)); };
+  $('colors').appendChild(b);
 });
-addEventListener('keydown', e => { if (e.code === 'Escape') { running = false; document.getElementById('overlay').style.display = 'flex'; } });
+function saveProfile() {
+  myName = ($('nick').value.trim() || 'Jogador').slice(0, 12);
+  try { localStorage.setItem('sr-name', myName); localStorage.setItem('sr-color', myColor); } catch (err) { /* ignore */ }
+  player.name = myName; player.col = myColor; player.C = palette(myColor);
+  if (bot.col === myColor) { bot.col = myColor === COLORS[1] ? COLORS[0] : COLORS[1]; bot.C = palette(bot.col); }
+}
+function startGame() { $('overlay').style.display = 'none'; running = true; if (!AC) initAudio(); else AC.resume(); }
+function roomStatus(html) { $('room').hidden = false; $('room').innerHTML = html; }
+const roomCode = (new URLSearchParams(location.search).get('sala') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+if (roomCode) {
+  $('join').hidden = false; $('join').textContent = `ENTRAR NA SALA ${roomCode}`;
+  $('play').hidden = true; $('host').hidden = true;
+  $('lobby-sub').textContent = 'Você foi convidado para uma partida. Escolha nome e cor e entre.';
+}
+$('play').onclick = () => { saveProfile(); startGame(); };
+addEventListener('keydown', e => { if (e.code === 'Escape' && netMode === 'solo') { running = false; $('overlay').style.display = 'flex'; } });
+
+// ================= Online (PeerJS, host-authoritative) =================
+// The host runs the whole simulation; guests send inputs every tick and get a snapshot every 2 ticks,
+// plus events (shots, hits, kills, explosions) to replay the effects locally.
+const PEER_PREFIX = 'soldat-remake-v1-';
+let peer = null, hostConn = null, myId = null, guestN = 0;
+const conns = [];
+const r2 = v => Math.round(v * 100) / 100;
+function needPeer() { if (typeof Peer !== 'undefined') return true; roomStatus('Não foi possível carregar o módulo online. Verifique a internet e recarregue.'); return false; }
+
+$('host').onclick = () => {
+  if (!needPeer()) return;
+  saveProfile();
+  roomId = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 24 | 0]).join('');
+  roomStatus('Criando sala...');
+  peer = new Peer(PEER_PREFIX + roomId);
+  peer.on('open', () => {
+    netMode = 'host';
+    const bi = soldiers.indexOf(bot); if (bi >= 0) soldiers.splice(bi, 1);
+    const link = `${location.origin}${location.pathname}?sala=${roomId}`;
+    roomStatus(`Sala <b>${roomId}</b> criada. Mande este link para quem vai jogar com você:<code>${link}</code><button id="copy" class="alt">COPIAR LINK</button><button id="go">ENTRAR NO JOGO</button>`);
+    $('copy').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => { $('copy').textContent = 'LINK COPIADO'; }); };
+    $('go').onclick = startGame;
+    $('play').hidden = true; $('host').hidden = true;
+  });
+  peer.on('connection', conn => {
+    conn.on('data', m => onHostData(conn, m));
+    conn.on('close', () => dropGuest(conn));
+    conn.on('error', () => dropGuest(conn));
+  });
+  // the matchmaking socket drops after a while; reconnect so new players can still find the room
+  peer.on('disconnected', () => { if (!peer.destroyed) setTimeout(() => peer.reconnect(), 1000); });
+  peer.on('error', err => { if (netMode !== 'host') roomStatus(`Não deu para criar a sala (${err.type || err}). Tente de novo.`); });
+};
+function onHostData(conn, m) {
+  if (!m || typeof m !== 'object') return;
+  if (m.t === 'hello' && !conn.soldier) {
+    const name = String(m.name || 'Amigo').slice(0, 12), col = COLORS.includes(m.col) ? m.col : COLORS[2];
+    const g = makeSoldier(name, col, 2600, groundH(2600) - 3, false, 'g' + (++guestN));
+    g.remote = true; unstick(g); soldiers.push(g); conn.soldier = g; conns.push(conn);
+    conn.send({ t: 'welcome', id: g.id });
+    bigMsg = { text: `${name} entrou`, t: 180 }; emit({ t: 'msg', text: `${name} entrou` });
+  } else if (m.t === 'in' && conn.soldier) {
+    const g = conn.soldier, a = g.acc || (g.acc = {}), i = m.i || {};
+    for (const k of ['jumpPressed', 'pronePressed', 'firePressed', 'grenadePressed', 'crouchPressed']) if (i[k]) a[k] = true;
+    if (Number.isInteger(i.switchTo) && i.switchTo >= 0 && i.switchTo < WEAPONS.length) a.switchTo = i.switchTo;
+    g.netIn = { left: !!i.left, right: !!i.right, crouch: !!i.crouch, jet: !!i.jet, fire: !!i.fire, reload: !!i.reload, grenadeHeld: !!i.grenadeHeld, aimX: +i.aimX || 0, aimY: +i.aimY || 0 };
+  }
+}
+function dropGuest(conn) {
+  const i = conns.indexOf(conn); if (i < 0) return;
+  conns.splice(i, 1);
+  const g = conn.soldier, k = soldiers.indexOf(g); if (k >= 0) soldiers.splice(k, 1);
+  bigMsg = { text: `${g.name} saiu`, t: 180 }; emit({ t: 'msg', text: `${g.name} saiu` });
+}
+function packSoldier(e) {
+  return { id: e.id, name: e.name, col: e.col, x: r2(e.x), y: r2(e.y), vx: r2(e.vx), vy: r2(e.vy), aim: r2(e.aim), facing: e.facing, stance: e.stance,
+    hp: r2(e.hp), jet: e.jet, wi: e.wi, am: e.ammo[e.wi], reloadT: e.reloadT, dead: e.dead, respawnT: e.respawnT, rollT: e.rollT, rollDir: e.rollDir,
+    flipT: e.flipT, jumpDir: e.jumpDir, jumpT: e.jumpT, onGround: e.onGround, jetting: e.jetting, anim: r2(e.anim), protect: e.protect,
+    kills: e.kills, deaths: e.deaths, grenades: e.grenades, gCharge: e.gCharge, startT: e.startT,
+    rag: e.dead && e.rag ? e.rag.flatMap(q => [r2(q.x), r2(q.y)]) : null };
+}
+function hostSend() {
+  if (!conns.length) { netEvents.length = 0; return; }
+  const msg = { t: 's', s: soldiers.map(packSoldier),
+    b: bullets.map(b => [r2(b.x), r2(b.y), r2(b.vx), r2(b.vy), r2(b.sx), r2(b.sy), WEAPONS.indexOf(b.w)]),
+    g: grenades.map(g => [r2(g.x), r2(g.y), r2(g.r)]), ev: netEvents.splice(0) };
+  for (const c of conns) if (c.open) c.send(msg);
+}
+
+$('join').onclick = () => {
+  if (!needPeer()) return;
+  saveProfile();
+  roomStatus('Conectando à sala...');
+  $('join').hidden = true;
+  netMode = 'guest'; soldiers.length = 0;
+  peer = new Peer();
+  peer.on('open', () => {
+    hostConn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+    hostConn.on('open', () => hostConn.send({ t: 'hello', name: myName, col: myColor }));
+    hostConn.on('data', m => { if (m && m.t === 'welcome') { myId = m.id; startGame(); } else if (m && m.t === 's') applySnapshot(m); });
+    hostConn.on('close', () => { running = false; $('overlay').style.display = 'flex'; roomStatus('A conexão com a sala caiu. Recarregue a página para entrar de novo.'); });
+  });
+  peer.on('error', err => { $('join').hidden = false; roomStatus(err.type === 'peer-unavailable' ? 'Sala não encontrada. Confira o link ou peça um novo.' : `Erro de conexão (${err.type || err}).`); });
+};
+function applySnapshot(m) {
+  const ids = new Set();
+  for (const d of m.s) {
+    ids.add(d.id);
+    let e = soldiers.find(q => q.id === d.id);
+    if (!e) { e = makeSoldier(d.name, d.col, d.x, d.y, false, d.id); soldiers.push(e); }
+    const { x, y, am, rag, col, ...rest } = d;
+    Object.assign(e, rest);
+    if (e.col !== col) { e.col = col; e.C = palette(col); }
+    e.ammo[e.wi] = am;
+    e.tx = x; e.ty = y;
+    if (e.dead || Math.hypot(e.x - x, e.y - y) > 60) { e.x = x; e.y = y; }
+    e.rag = rag ? Array.from({ length: rag.length / 2 }, (_, i) => ({ x: rag[2 * i], y: rag[2 * i + 1] })) : null;
+  }
+  for (let i = soldiers.length - 1; i >= 0; i--) if (!ids.has(soldiers[i].id)) soldiers.splice(i, 1);
+  const me = soldiers.find(q => q.id === myId); if (me) player = me;
+  bullets.length = 0;
+  for (const b of m.b) bullets.push({ x: b[0], y: b[1], vx: b[2], vy: b[3], sx: b[4], sy: b[5], w: WEAPONS[b[6]] || WEAPONS[0] });
+  grenades.length = 0;
+  for (const g of m.g) grenades.push({ x: g[0], y: g[1], r: g[2], fuse: 99 });
+  const byId = id => soldiers.find(q => q.id === id);
+  for (const ev of m.ev) {
+    if (ev.t === 'shot') { const e = byId(ev.id); if (e) shotFx(e, WEAPONS[ev.wi], ev.mx, ev.my, ev.sx, ev.sy, ev.aim); }
+    else if (ev.t === 'hit') hitFx(byId(ev.tgt), byId(ev.src), ev.x, ev.y, ev.dx, ev.dy);
+    else if (ev.t === 'kill') killFx(byId(ev.tgt), byId(ev.src), ev.wname, ev.x, ev.y, ev.dx);
+    else if (ev.t === 'boom') boomFx(ev.x, ev.y, ev.r);
+    else if (ev.t === 'imp') impactFx(ev.x, ev.y, ev.vx, ev.vy);
+    else if (ev.t === 'msg') bigMsg = { text: ev.text, t: 180 };
+  }
+}
+function guestStep() {
+  tick++;
+  playerInput();
+  if (hostConn && hostConn.open) hostConn.send({ t: 'in', i: player.input });
+  for (const k in pressed) pressed[k] = false;
+  // between snapshots: extrapolate with velocity and ease toward it
+  for (const g of soldiers) {
+    if (g.hitFlash > 0) g.hitFlash--;
+    if (g.flashT > 0) g.flashT--;
+    if (g.dead) continue;
+    g.tx += g.vx; g.ty += g.vy;
+    g.x += (g.tx - g.x) * 0.35; g.y += (g.ty - g.y) * 0.35;
+    if (g.jetting) jetFx(g);
+  }
+  for (const b of bullets) { b.vy += BULLET_GRAV; b.x += b.vx; b.y += b.vy; b.vx *= DAMP; b.vy *= DAMP; }
+  updateParticles();
+  frameTail();
+}
 requestAnimationFrame(frame);
 </script>
 </body>
