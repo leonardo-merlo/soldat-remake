@@ -242,6 +242,7 @@ function buildWorld() {
     }
   }
   worldCanvas = wc;
+  buildLivingWorld();
 }
 function drawPine(g, x, y, h, rng) {
   const pine = IMG[h > 75 ? 'pine-large' : h > 50 ? 'pine-medium' : 'pine-small'];
@@ -603,6 +604,7 @@ function shotFx(e, w, mx, my, sx, sy, aim) {
   particles.push({ t: 'shell', x: sx + c * 5, y: sy + sn * 5, vx: -e.facing * rnd(-.4, 1.8) + e.vx * .5, vy: rnd(-2, .3) + e.vy * .5, life: 90, max: 90, s: 1, r: rnd(0, 6), vr: rnd(-.4, .4) });
   if (w.kind === 'sniper' || w.pellets || w.kind === 'tube') for (let i = 0; i < 4; i++) particles.push({ t: 'smoke', x: mx, y: my, vx: c * rnd(.3, 1.2), vy: sn * rnd(.3, 1.2) - .2, life: 35, max: 35, s: 2.5 });
   sfxShot(w, mx, my);
+  nudgeLanterns(mx, my, .012, 90);
 }
 
 function hurt(t, dmg, src, wname, hx, hy, dirx, diry) {
@@ -629,11 +631,11 @@ function killFx(t, src, wname, hx, hy, dirx) {
   if (t) dropWeapon(t);
   for (let i = 0; i < 34; i++) particles.push({ t: 'gore', x: hx + rnd(-6, 6), y: hy + rnd(-10, 8), vx: dirx * rnd(0, 1.5) + rnd(-1, 1), vy: rnd(-1.5, .5), life: rnd(40, 80), max: 80, s: rnd(3, 6) });
   const wpn = WEAPONS.find(q => q.short === wname);
-  feed.push({ killer: src ? src.name : '?', kills: src ? src.kills : 0, victim: t ? t.name : '?', img: wpn ? wpn.img : 'frag-grenade', wname, life: 900 });
+  feed.push({ killer: src ? src.name : '?', kills: src ? src.kills : 0, victim: t ? t.name : '?', img: wpn ? wpn.img : wname === 'Granada' ? 'frag-grenade' : null, wname, life: 900 });
   if (src === player && t !== player) {
     player.streak = tick - player.lastKillT < 180 ? player.streak + 1 : 1; player.lastKillT = tick;
     bigMsg = { text: player.streak === 2 ? 'DOUBLE KILL' : player.streak === 3 ? 'TRIPLE KILL' : player.streak > 3 ? 'MULTI KILL' : `Você matou ${t.name}`, t: 240 };
-  } else if (t === player) bigMsg = { text: src === t ? 'Você se explodiu' : `Morto por ${src ? src.name : '?'}`, t: 240 };
+  } else if (t === player) bigMsg = { text: src === t ? (wname === 'Gelo' ? 'Esmagado pelo gelo' : 'Você se explodiu') : `Morto por ${src ? src.name : '?'}`, t: 240 };
 }
 
 // Verlet ragdoll: 11 points joined by sticks, colliding with the terrain mask (Soldat corpses are skeletons too)
@@ -685,6 +687,7 @@ function respawn(e) {
 
 // Soldat explosion: damage = mult / (distance + 1) to the nearest body part, inside the radius
 function boomFx(x, y, r) {
+  nudgeLanterns(x, y, .06, 320);
   sfxBoom(x, y); shakeAmt = Math.max(shakeAmt, 10 * volAt(x, y) + 2);
   particles.push({ t: 'explosion', x, y, life: 32, max: 32 });
   particles.push({ t: 'boom', x, y, life: 10, max: 10, s: r * 0.9 });
@@ -698,6 +701,8 @@ function impactFx(x, y, vx, vy) {
 }
 function explode(x, y, r, mult, src, wname) {
   boomFx(x, y, r); emit({ t: 'boom', x, y, r });
+  for (const k of CRATES) if (k.alive) { const d = Math.hypot(k.x - x, k.y - 8 - y); if (d < r) damageCrate(k, mult / (d + 1)); }
+  for (const c of ICICLES) if (c.state === 0 && Math.hypot(c.x - x, c.y + c.len / 2 - y) < r * 1.3) { c.state = 1; c.vy = 0; c.by = src; }
   for (const t of soldiers) {
     if (t.dead) continue;
     const [, h] = dims(t);
@@ -726,6 +731,7 @@ function updateBullets() {
         else { impactFx(b.x, b.y, b.vx, b.vy); emit({ t: 'imp', x: b.x, y: b.y, vx: b.vx, vy: b.vy }); }
         dead = true; break;
       }
+      if (hitHazard(b)) { dead = true; break; }
       for (const t of soldiers) {
         if (t === b.owner || t.dead) continue;
         const [w, h] = dims(t);
@@ -765,7 +771,8 @@ function updateParticles() {
     if (p.t === 'blood' || p.t === 'shell' || p.t === 'snow' || p.t === 'spark' || p.t === 'gun') p.vy += p.t === 'spark' ? .12 : p.t === 'gun' ? .135 : .2;
     if (p.t === 'gore') { p.vy += .03; p.vx *= .96; p.vy *= .96; }
     if (p.t === 'jet' || p.t === 'puff') { p.vx *= .95; p.vy *= .95; }
-    if (p.t === 'smoke') { p.vx *= .97; p.vy = p.vy * .97 - .015; p.s += .08; }
+    if (p.t === 'smoke') { p.vx = p.vx * .97 + wind * .01; p.vy = p.vy * .97 - .015; p.s += .08; }
+    if (p.t === 'snow') p.vx += wind * .006;
     if (p.t === 'fire') { p.vx *= .92; p.vy *= .92; }
     const nx = p.x + p.vx, ny = p.y + p.vy;
     if ((p.t === 'blood' || p.t === 'shell' || p.t === 'snow' || p.t === 'gun') && solid(nx, ny)) {
@@ -855,6 +862,231 @@ function playerInput() {
   if (wheelSwitch) { inp.switchTo = (p.wi + wheelSwitch + WEAPONS.length * 10) % WEAPONS.length; wheelSwitch = 0; }
 }
 
+// ================= Living world: icicles, crates, pickups, lanterns, wind, footprints =================
+// Icicles, crates and pickups change the match, so the host owns them; lanterns, wind, fog and footprints are local visuals.
+const ICICLES = [], CRATES = [], LANTERNS = [], pickups = [];
+const PICKUP_KINDS = ['health', 'ammo', 'grenades'];
+let wind = 0, gustT = 400, gustDir = 1, gustPow = 1, fogX = 0;
+function openBelow(x, y, d) { for (let k = 6; k < d; k += 4) if (solid(x, y + k)) return false; return true; }
+function groundBelow(x, y) { let yy = y; while (yy < H && !solid(x, yy)) yy++; return yy; }
+function buildLivingWorld() {
+  const rng = mulberry(777); // own seed: host and guest must place the same objects
+  const cands = [];
+  for (let x = 40; x < W - 40; x += 6) for (let y = 300; y < 1250; y++) {
+    const i = y * W + x;
+    if (mask[i] === ROCK && !mask[i + W] && openBelow(x, y, 90)) cands.push([x, y + 1]);
+  }
+  for (let i = cands.length - 1; i > 0; i--) { const j = rng() * (i + 1) | 0; [cands[i], cands[j]] = [cands[j], cands[i]]; }
+  for (const [x, y] of cands) {
+    if (ICICLES.length >= 22) break;
+    if (ICICLES.some(c => Math.hypot(c.x - x, c.y - y) < 70)) continue;
+    ICICLES.push({ x, y, len: 14 + rng() * 12, w: 3.5 + rng() * 2, state: 0, dy: 0, vy: 0, regrow: 0, by: null });
+  }
+  for (const [cx, cy] of [[560, 900], [1380, 880], [1690, 620], [2050, 1100], [2450, 1000], [2700, 380], [330, 600], [905, 600]]) {
+    const gy = groundBelow(cx, cy);
+    if (gy < H - 5) CRATES.push({ x: cx, y: gy, hp: 60, alive: true, respawn: 0, hitT: 0 });
+  }
+  for (const ax of [335, 905, 1545, 2240, 2560, 2860]) {
+    let y = 300;
+    while (y < 1300 && !(solid(ax, y) && !solid(ax, y + 1) && openBelow(ax, y, 60))) y++;
+    if (y < 1300) LANTERNS.push({ x: ax, y: y + 1, len: 18 + rng() * 10, th: rnd(-.2, .2), om: 0, flick: 0 });
+  }
+}
+function updateLivingWorld() {
+  for (const c of ICICLES) {
+    if (c.state === 1) {
+      c.vy = Math.min(c.vy + BULLET_GRAV, 9); c.dy += c.vy;
+      const tipX = c.x, tipY = c.y + c.dy + c.len;
+      for (const t of soldiers) {
+        if (t.dead) continue;
+        const [w, h] = dims(t);
+        if (Math.abs(t.x - tipX) < w / 2 + c.w && tipY > t.y - h && tipY - c.len < t.y) { hurt(t, 60 + c.vy * 12, c.by || t, 'Gelo', tipX, tipY, 0, 1); shatter(c); break; }
+      }
+      if (c.state === 1 && solid(tipX, tipY)) shatter(c);
+    } else if (c.state === 2 && --c.regrow <= 0) { c.state = 0; c.dy = 0; c.vy = 0; c.by = null; }
+  }
+  for (const k of CRATES) { if (k.hitT > 0) k.hitT--; if (!k.alive && --k.respawn <= 0) { k.alive = true; k.hp = 60; } }
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const q = pickups[i];
+    if (!solid(q.x, q.y + 1)) { q.vy = Math.min(q.vy + GRAV * 2, 6); q.y += q.vy; while (solid(q.x, q.y)) { q.y--; q.vy = 0; } }
+    if (--q.life <= 0) { pickups.splice(i, 1); continue; }
+    for (const t of soldiers) {
+      if (t.dead) continue;
+      const [, h] = dims(t);
+      if (Math.abs(t.x - q.x) < 9 && q.y > t.y - h - 4 && q.y - 8 < t.y + 2) {
+        if (applyPickup(t, q.kind)) { pickups.splice(i, 1); pickFx(t, q.kind); emit({ t: 'pick', id: t.id, kind: q.kind }); }
+        break;
+      }
+    }
+  }
+}
+function shatter(c) { c.state = 2; c.regrow = 1200; const x = c.x, y = c.y + c.dy + c.len; iceFx(x, y); emit({ t: 'ice', x, y }); }
+function iceFx(x, y) {
+  for (let i = 0; i < 14; i++) particles.push({ t: 'snow', x, y: y - 2, vx: rnd(-2.5, 2.5), vy: rnd(-3, -.5), life: rnd(30, 60), max: 60, s: rnd(1, 2.6) });
+  noise(.12, 5000, volAt(x, y) * .4, 'highpass');
+}
+function applyPickup(t, kind) {
+  if (kind === 'health') { if (t.hp >= MAX_HEALTH) return false; t.hp = Math.min(MAX_HEALTH, t.hp + 75); }
+  else if (kind === 'ammo') { t.ammo = WEAPONS.map(w => w.mag); t.reloadT = 0; }
+  else { if (t.grenades >= 5) return false; t.grenades = 5; }
+  return true;
+}
+function pickFx(t, kind) {
+  if (!t) return;
+  if (t === player) bigMsg = { text: kind === 'health' ? '+ VIDA' : kind === 'ammo' ? '+ MUNIÇÃO' : '+ GRANADAS', t: 90 };
+  noise(.08, 2500, volAt(t.x, t.y) * .4, 'bandpass');
+}
+function damageCrate(k, dmg) {
+  if (!k.alive) return;
+  k.hp -= dmg; k.hitT = 6;
+  if (k.hp > 0) return;
+  k.alive = false; k.respawn = 900;
+  crateFx(k.x, k.y); emit({ t: 'crate', x: k.x, y: k.y });
+  pickups.push({ x: k.x, y: k.y - 2, vy: -2, kind: PICKUP_KINDS[Math.random() * 3 | 0], life: 1800 });
+}
+function crateFx(x, y) {
+  for (let i = 0; i < 16; i++) particles.push({ t: 'shell', wood: true, x: x + rnd(-8, 8), y: y - rnd(2, 15), vx: rnd(-2.5, 2.5), vy: rnd(-3.5, -1), life: 120, max: 120, s: 1, r: rnd(0, 6), vr: rnd(-.4, .4) });
+  for (let i = 0; i < 6; i++) particles.push({ t: 'smoke', x, y: y - 8, vx: rnd(-.6, .6), vy: rnd(-.6, 0), life: 40, max: 40, s: 3 });
+  noise(.25, 900, volAt(x, y) * .8);
+}
+// bullets can knock down icicles and break crates; returns true when the bullet stops
+function hitHazard(b) {
+  for (const c of ICICLES) if (c.state === 0 && Math.abs(b.x - c.x) < c.w + 1.5 && b.y > c.y - 1 && b.y < c.y + c.len) {
+    c.state = 1; c.vy = 0; c.by = b.owner;
+    impactFx(b.x, b.y, b.vx, b.vy); emit({ t: 'imp', x: b.x, y: b.y, vx: b.vx, vy: b.vy });
+    return true;
+  }
+  for (const k of CRATES) if (k.alive && Math.abs(b.x - k.x) < 9 && b.y > k.y - 17 && b.y < k.y) {
+    if (b.w.explosive) explode(b.x, b.y, b.w.explosive.r, b.w.mult, b.owner, b.w.short);
+    else { damageCrate(k, Math.hypot(b.vx, b.vy) * b.w.mult); impactFx(b.x, b.y, b.vx, b.vy); emit({ t: 'imp', x: b.x, y: b.y, vx: b.vx, vy: b.vy }); }
+    return true;
+  }
+  return false;
+}
+function updateLanterns() {
+  for (const L of LANTERNS) {
+    L.om += -GRAV * 1.2 / L.len * Math.sin(L.th) + wind * 0.0004;
+    L.om *= 0.985; L.th += L.om;
+    if (Math.abs(L.th) > 1) { L.th = Math.sign(L.th); L.om *= -0.4; }
+    if (L.flick > 0) L.flick--;
+  }
+}
+function nudgeLanterns(x, y, power, radius) {
+  for (const L of LANTERNS) {
+    const lx = L.x + Math.sin(L.th) * L.len, ly = L.y + Math.cos(L.th) * L.len, d = Math.hypot(lx - x, ly - y);
+    if (d >= radius) continue;
+    const k = (1 - d / radius) * power;
+    L.om += Math.sign(lx - x || 1) * k;
+    if (k > .02) L.flick = Math.max(L.flick, k * 400 | 0);
+  }
+}
+function updateWind() {
+  if (--gustT <= 0) { gustT = 600 + Math.random() * 700; gustDir = Math.random() < .5 ? -1 : 1; gustPow = rnd(1, 2.2); }
+  const target = gustT < 220 ? gustDir * gustPow : -0.25;
+  wind += (target - wind) * 0.02;
+  fogX += 0.12 + wind * 0.25;
+}
+// snow puff on landing, footprints and a little dust while running
+function groundFx(e) {
+  if (e.dead) { e.pg = false; return; }
+  if (e.onGround && !e.pg && (e.pvy || 0) > 2.2) for (let i = 0; i < 8; i++) particles.push({ t: 'snow', x: e.x + rnd(-5, 5), y: e.y - 1, vx: rnd(-1.6, 1.6) + e.vx * .3, vy: rnd(-1.6, -.4), life: rnd(25, 45), max: 45, s: rnd(1, 2.4) });
+  if (e.onGround && Math.abs(e.vx) > 1) {
+    const stp = Math.floor(e.anim / Math.PI);
+    if (stp !== e.lastStep) {
+      e.lastStep = stp;
+      particles.push({ t: 'print', x: e.x + rnd(-1, 1), y: e.y, life: 600, max: 600, s: 1, stuck: true });
+      if (Math.random() < .6) particles.push({ t: 'snow', x: e.x, y: e.y - 1, vx: -e.vx * .25 + rnd(-.4, .4), vy: rnd(-1, -.3), life: 25, max: 25, s: rnd(.8, 1.6) });
+    }
+  }
+  e.pg = e.onGround; e.pvy = e.vy;
+}
+function drawLivingWorld() {
+  for (const p of particles) if (p.t === 'print') { ctx.globalAlpha = .35 * Math.min(1, p.life / 120); ctx.fillStyle = '#5a6e96'; ctx.beginPath(); ctx.ellipse(p.x, p.y - .3, 1.7, .6, 0, 0, 7); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  for (const k of CRATES) {
+    if (!k.alive) continue;
+    const wob = k.hitT > 0 ? rnd(-.8, .8) : 0;
+    if (ready(IMG.crate)) ctx.drawImage(IMG.crate, k.x - 9 + wob, k.y - 17, 18, 17);
+    else { ctx.fillStyle = '#7a5634'; ctx.fillRect(k.x - 9 + wob, k.y - 17, 18, 17); }
+  }
+  for (const q of pickups) {
+    const y = q.y - 7 - Math.max(0, Math.sin(tick * 0.08)) * 1.5;
+    ctx.globalAlpha = Math.min(1, q.life / 60);
+    ctx.fillStyle = q.kind === 'health' ? '#f2f2f2' : q.kind === 'ammo' ? '#5b6b3a' : '#3d4a2c';
+    ctx.fillRect(q.x - 4.5, y, 9, 7);
+    if (q.kind === 'health') { ctx.fillStyle = '#d42a2a'; ctx.fillRect(q.x - .8, y + 1.2, 1.6, 4.6); ctx.fillRect(q.x - 2.3, y + 2.7, 4.6, 1.6); }
+    else if (q.kind === 'ammo') { ctx.fillStyle = '#f2d23a'; for (let i = -2; i <= 2; i += 2) ctx.fillRect(q.x + i - .5, y + 1.5, 1, 4); }
+    else { ctx.fillStyle = '#7f9150'; for (let i = -2.2; i <= 2.2; i += 2.2) { ctx.beginPath(); ctx.arc(q.x + i, y + 3.5, 1, 0, 7); ctx.fill(); } }
+  }
+  ctx.globalAlpha = 1;
+  for (const c of ICICLES) {
+    const len = c.state === 2 ? c.len * Math.max(0, 1 - c.regrow / 1200) : c.len, y = c.y + (c.state === 1 ? c.dy : 0);
+    if (len < 1) continue;
+    const g = ctx.createLinearGradient(0, y, 0, y + len);
+    g.addColorStop(0, 'rgba(235,246,255,.98)'); g.addColorStop(.7, 'rgba(190,220,255,.9)'); g.addColorStop(1, 'rgba(160,200,255,.5)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(c.x - c.w, y - 1); ctx.lineTo(c.x + c.w, y - 1); ctx.lineTo(c.x + c.w * .15, y + len); ctx.lineTo(c.x - c.w * .1, y + len * .97); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(c.x - c.w * .5, y, .8, len * .55);
+  }
+  for (const L of LANTERNS) {
+    const ex = L.x + Math.sin(L.th) * L.len, ey = L.y + Math.cos(L.th) * L.len;
+    ctx.strokeStyle = '#2d313a'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(-L.th); ctx.scale(1.6, 1.6);
+    ctx.fillStyle = '#2d313a'; ctx.fillRect(-2.6, 0, 5.2, 1.6); ctx.fillRect(-2.2, 7.4, 4.4, 1.2);
+    ctx.fillStyle = `rgba(255,210,122,${lanternGlow(L)})`; ctx.fillRect(-2, 1.6, 4, 5.8);
+    ctx.strokeStyle = '#2d313a'; ctx.lineWidth = .5; ctx.strokeRect(-2, 1.6, 4, 5.8);
+    ctx.restore();
+  }
+}
+function lanternGlow(L) { return L.flick > 0 ? (Math.random() < .45 ? .2 : 1) : .85 + .15 * Math.sin(tick * .3 + L.x); }
+function drawLanternLights() {
+  for (const L of LANTERNS) {
+    const ex = L.x + Math.sin(L.th) * (L.len + 7), ey = L.y + Math.cos(L.th) * (L.len + 7), a = .55 * lanternGlow(L);
+    const g = ctx.createRadialGradient(ex, ey, 0, ex, ey, 70); g.addColorStop(0, `rgba(255,200,120,${a})`); g.addColorStop(1, 'rgba(255,200,120,0)');
+    ctx.fillStyle = g; ctx.fillRect(ex - 70, ey - 70, 140, 140);
+  }
+}
+// aurora ribbons over the sky, behind the mountains
+function drawAurora() {
+  const t = performance.now() / 1000, base = SH * 0.13 + (600 - cam.y) * 0.02 * Z, off = cam.x * 0.02 * Z;
+  const edge = (x, ph) => base + Math.sin((x + off) / (SW * .18) + t * .25 + ph) * SH * .04 + Math.sin((x + off) / (SW * .07) - t * .4 + ph * 2) * SH * .015;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const [col, ph, a] of [['60,255,170', 0, 1], ['120,140,255', 2.1, .7], ['80,230,220', 4.2, .55]]) {
+    const g = ctx.createLinearGradient(0, base - SH * .1, 0, base + SH * .22);
+    g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(.35, `rgba(${col},${.24 * a})`); g.addColorStop(.65, `rgba(${col},${.09 * a})`); g.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = g; ctx.beginPath();
+    for (let x = 0; x <= SW + 16; x += 16) { const y = edge(x, ph) - SH * .08; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    for (let x = SW + 16; x >= 0; x -= 16) ctx.lineTo(x, edge(x, ph) + SH * .2);
+    ctx.fill();
+    // faint vertical curtain rays
+    ctx.fillStyle = `rgba(${col},${.035 * a})`;
+    for (let i = 0; i < 26; i++) { const x = ((i * 97 + off * (1 + ph * .1)) % (SW + 40) + SW + 40) % (SW + 40) - 20, y = edge(x, ph); ctx.fillRect(x, y - SH * .06, 3, SH * (.12 + .06 * Math.sin(t + i))); }
+  }
+  ctx.restore();
+}
+// low fog drifting over the lake (pre-rendered soft blobs, scrolled with the wind)
+let fogTex = null;
+function buildFog() {
+  const c = mkCanvas(1024, 120), g = c.getContext('2d'), rng = mulberry(31);
+  for (let i = 0; i < 60; i++) {
+    const x = rng() * 1024, y = 40 + rng() * 50, r = 30 + rng() * 70;
+    for (const ox of [x, x - 1024, x + 1024]) {
+      const gr = g.createRadialGradient(ox, y, 0, ox, y, r); gr.addColorStop(0, 'rgba(225,228,245,.13)'); gr.addColorStop(1, 'rgba(225,228,245,0)');
+      g.fillStyle = gr; g.save(); g.translate(ox, y); g.scale(1, .35); g.translate(-ox, -y); g.beginPath(); g.arc(ox, y, r, 0, 7); g.fill(); g.restore();
+    }
+  }
+  fogTex = c;
+}
+function drawFog(yw) {
+  if (!fogTex) buildFog();
+  const tw = 1024 * .9 * Z, th = 120 * .9 * Z;
+  for (const [k, dy, a] of [[1, -th * .55, .9], [1.6, -th * .35, .7]]) {
+    let x0 = -(((fogX * k - cam.x * .13) * Z) % tw); if (x0 > 0) x0 -= tw;
+    ctx.globalAlpha = a;
+    for (let x = x0; x < SW; x += tw) ctx.drawImage(fogTex, x, yw + dy, tw + 1, th);
+  }
+  ctx.globalAlpha = 1;
+}
+
 // ================= Loop =================
 function step() {
   tick++;
@@ -867,8 +1099,8 @@ function step() {
     s.input = { ...i, jumpPressed: !!a.jumpPressed, pronePressed: !!a.pronePressed, firePressed: !!a.firePressed, grenadePressed: !!a.grenadePressed, crouchPressed: !!a.crouchPressed, switchTo: a.switchTo != null ? a.switchTo : null };
     s.acc = {};
   }
-  for (const s of soldiers) updateSoldier(s);
-  updateBullets(); updateParticles();
+  for (const s of soldiers) { updateSoldier(s); groundFx(s); }
+  updateBullets(); updateLivingWorld(); updateParticles();
   frameTail();
   if (netMode === 'host' && tick % 2 === 0) hostSend();
 }
@@ -877,6 +1109,7 @@ function frameTail() {
   for (const f of feed) f.life--; while (feed.length && feed[0].life <= 0) feed.shift(); if (feed.length > 4) feed.shift();
   if (bigMsg) bigMsg.t--;
   shakeAmt *= 0.86;
+  updateWind(); updateLanterns();
   // camera: follow player and lean toward the mouse, Soldat-style
   const p = player, tx = p.x + (mouse.x - SW / 2) / Z * 0.45, ty = p.y - 15 + (mouse.y - SH / 2) / Z * 0.45;
   cam.x += (tx - cam.x) * 0.14; cam.y += (ty - cam.y) * 0.14;
@@ -892,7 +1125,7 @@ let lastCam = { x: cam.x, y: cam.y };
 function updateSnow() {
   const dxw = (cam.x - lastCam.x) / (SW / Z), dyw = (cam.y - lastCam.y) / (SH / Z); lastCam = { x: cam.x, y: cam.y };
   for (const f of flakes) {
-    f.ph += 0.02; f.x += (Math.sin(f.ph) * 0.0004 - 0.0003) * f.s - dxw * f.s * 0.6; f.y += 0.0011 * f.sp * f.s - dyw * f.s * 0.6;
+    f.ph += 0.02; f.x += (Math.sin(f.ph) * 0.0004 - 0.0003 + wind * 0.0009) * f.s - dxw * f.s * 0.6; f.y += 0.0011 * f.sp * f.s - dyw * f.s * 0.6;
     f.x = (f.x + 1) % 1; f.y = (f.y + 1) % 1;
   }
 }
@@ -907,6 +1140,7 @@ function drawBackground() {
   let g = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 260 * Z / 3);
   g.addColorStop(0, 'rgba(255,240,200,1)'); g.addColorStop(.08, 'rgba(255,225,170,.95)'); g.addColorStop(.3, 'rgba(255,180,120,.35)'); g.addColorStop(1, 'rgba(255,160,120,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, SW, SH);
+  drawAurora();
   const layers = PAINTED.every(L => ready(IMG[L.key])) ? [BG[0], ...PAINTED] : BG;
   for (const L of layers) {
     const img = L.img || IMG[L.key], sc = L.s || 1;
@@ -919,6 +1153,7 @@ function drawBackground() {
       else ctx.drawImage(img, x, y, tw + 1, th);
     }
     if (L.bottom && y + th < SH) { ctx.fillStyle = L.bottom; ctx.fillRect(0, y + th - 1, SW, SH - y - th + 1); }
+    if (L.key === 'bg-mid') drawFog(y + L.row * sc * Z);
     if (L.lake) {
       const wl = y + L.row * Z;
       ctx.globalCompositeOperation = 'lighter';
@@ -942,7 +1177,9 @@ function drawWorld() {
   ctx.globalAlpha = 1;
   for (const p of particles) if (p.t === 'gun' && ready(IMG[p.img])) { const im = IMG[p.img], gw = im.naturalWidth * PX, gh = im.naturalHeight * PX; ctx.globalAlpha = Math.min(1, p.life / 60); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.drawImage(im, -p.cx * gw, -p.cy * gh, gw, gh); ctx.restore(); }
   ctx.globalAlpha = 1;
-  for (const p of particles) if (p.t === 'shell') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = '#e0c860'; ctx.fillRect(-.9, -.5, 1.8, 1); ctx.restore(); }
+  for (const p of particles) if (p.t === 'shell') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); if (p.wood) { ctx.globalAlpha = Math.min(1, p.life / 40); ctx.fillStyle = '#7a5634'; ctx.fillRect(-1.8, -.7, 3.6, 1.4); } else { ctx.fillStyle = '#e0c860'; ctx.fillRect(-.9, -.5, 1.8, 1); } ctx.restore(); }
+  ctx.globalAlpha = 1;
+  drawLivingWorld();
   for (const s of soldiers) if (s.dead) drawSoldier(s);
   for (const s of soldiers) if (!s.dead) drawSoldier(s);
   const gi = IMG['frag-grenade'];
@@ -978,6 +1215,7 @@ function drawWorld() {
     else if (p.t === 'flash') { const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.s); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.6, 'rgba(255,255,240,.9)'); g.addColorStop(.85, 'rgba(242,210,90,.6)'); g.addColorStop(1, 'rgba(242,210,90,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, 7); ctx.fill(); }
     else if (p.t === 'boom') { const k = p.life / p.max; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.s); g.addColorStop(0, `rgba(255,245,210,${k})`); g.addColorStop(.4, `rgba(255,160,60,${k * .7})`); g.addColorStop(1, 'rgba(255,80,20,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, 7); ctx.fill(); }
   }
+  drawLanternLights();
   for (const L of LIGHTS) {
     if (L.x < camX - L.r || L.x > camX + vw + L.r || L.y < camY - L.r || L.y > camY + vh + L.r) continue;
     const g = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.r); g.addColorStop(0, `rgba(${L.c},${L.a})`); g.addColorStop(1, `rgba(${L.c},0)`);
@@ -1309,7 +1547,10 @@ function hostSend() {
   if (!conns.length) { netEvents.length = 0; return; }
   const msg = { t: 's', s: soldiers.map(packSoldier),
     b: bullets.map(b => [r2(b.x), r2(b.y), r2(b.vx), r2(b.vy), r2(b.sx), r2(b.sy), WEAPONS.indexOf(b.w)]),
-    g: grenades.map(g => [r2(g.x), r2(g.y), r2(g.r)]), ev: netEvents.splice(0) };
+    g: grenades.map(g => [r2(g.x), r2(g.y), r2(g.r)]),
+    ic: ICICLES.map(c => c.state === 1 ? Math.round(c.dy) + 1 : c.state === 0 ? 0 : -1 - Math.round(c.regrow)),
+    cr: CRATES.map(k => k.alive ? (k.hitT > 0 ? 2 : 1) : 0),
+    pk: pickups.map(q => [r2(q.x), r2(q.y), PICKUP_KINDS.indexOf(q.kind), q.life]), ev: netEvents.splice(0) };
   for (const c of conns) if (c.open) c.send(msg);
 }
 
@@ -1348,6 +1589,9 @@ function applySnapshot(m) {
   for (const b of m.b) bullets.push({ x: b[0], y: b[1], vx: b[2], vy: b[3], sx: b[4], sy: b[5], w: WEAPONS[b[6]] || WEAPONS[0] });
   grenades.length = 0;
   for (const g of m.g) grenades.push({ x: g[0], y: g[1], r: g[2], fuse: 99 });
+  if (m.ic) ICICLES.forEach((c, i) => { const v = m.ic[i]; if (v == null) return; if (v === 0) { c.state = 0; c.dy = 0; } else if (v > 0) { c.state = 1; c.dy = v - 1; } else { c.state = 2; c.regrow = -1 - v; } });
+  if (m.cr) CRATES.forEach((k, i) => { const v = m.cr[i]; if (v == null) return; k.alive = v > 0; k.hitT = v === 2 ? 6 : 0; });
+  if (m.pk) { pickups.length = 0; for (const q of m.pk) pickups.push({ x: q[0], y: q[1], kind: PICKUP_KINDS[q[2]] || 'ammo', life: q[3], vy: 0 }); }
   const byId = id => soldiers.find(q => q.id === id);
   for (const ev of m.ev) {
     if (ev.t === 'shot') { const e = byId(ev.id); if (e) shotFx(e, WEAPONS[ev.wi], ev.mx, ev.my, ev.sx, ev.sy, ev.aim); }
@@ -1356,6 +1600,9 @@ function applySnapshot(m) {
     else if (ev.t === 'boom') boomFx(ev.x, ev.y, ev.r);
     else if (ev.t === 'imp') impactFx(ev.x, ev.y, ev.vx, ev.vy);
     else if (ev.t === 'msg') bigMsg = { text: ev.text, t: 180 };
+    else if (ev.t === 'ice') iceFx(ev.x, ev.y);
+    else if (ev.t === 'crate') crateFx(ev.x, ev.y);
+    else if (ev.t === 'pick') pickFx(byId(ev.id), ev.kind);
   }
 }
 function guestStep() {
@@ -1371,6 +1618,7 @@ function guestStep() {
     g.tx += g.vx; g.ty += g.vy;
     g.x += (g.tx - g.x) * 0.35; g.y += (g.ty - g.y) * 0.35;
     if (g.jetting) jetFx(g);
+    groundFx(g);
   }
   for (const b of bullets) { b.vy += BULLET_GRAV; b.x += b.vx; b.y += b.vy; b.vx *= DAMP; b.vy *= DAMP; }
   updateParticles();
