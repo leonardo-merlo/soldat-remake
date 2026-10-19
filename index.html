@@ -222,6 +222,21 @@ function buildWorld() {
     const ly = lx === 900 ? 640 : (lx < 1300 ? 985 : surf[lx]);
     drawLamp(w, lx, ly + 2);
   }
+  // painted scenery (decorative, players pass in front of it); h = height in world units
+  const placeProp = (key, x, h, flip) => {
+    const im = IMG[key]; if (!ready(im)) return;
+    const pw = im.naturalWidth * h / im.naturalHeight, base = Math.max(surf[Math.round(x - pw * .35)], surf[Math.round(x)], surf[Math.round(x + pw * .35)]) + 3;
+    w.save(); w.translate(x, base); if (flip) w.scale(-1, 1); w.drawImage(im, -pw / 2, -h, pw, h); w.restore();
+  };
+  placeProp('watchtower', 2470, 96);
+  placeProp('tent', 2800, 30);
+  placeProp('fence', 2640, 16);
+  placeProp('sandbags', 1340, 13);
+  placeProp('sandbags', 1150, 12, true);
+  placeProp('signpost', 1296, 30);
+  placeProp('barrel', 1880, 17); placeProp('barrel', 1890, 17);
+  placeProp('barrel', 2930, 17);
+  placeProp('fence', 400, 15);
   // painted crate over the solid crate polygon, and small rocks scattered on the ground
   if (ready(IMG.crate)) w.drawImage(IMG.crate, 688, 951, 38, 36);
   if (ready(IMG['rock-small'])) {
@@ -390,7 +405,7 @@ loadImage('bg-far', ['assets/bg/far-mountains.png']);
 loadImage('bg-mid', ['assets/bg/castle-lake.png']);
 loadImage('wood-planks', ['assets/bg/wood-planks.png']);
 loadImage('rock', ['assets/bg/rock.png']);
-for (const k of ['pine-large', 'pine-medium', 'pine-small', 'lamp', 'crate', 'rock-small']) loadImage(k, [`assets/props/${k}.png`]);
+for (const k of ['pine-large', 'pine-medium', 'pine-small', 'lamp', 'crate', 'rock-small', 'sandbags', 'barrel', 'fence', 'signpost', 'tent', 'watchtower', 'lantern-hang', 'pk-health', 'pk-ammo', 'pk-grenades', 'pk-vest', 'pk-fuel']) loadImage(k, [`assets/props/${k}.png`]);
 for (let i = 1; i <= 16; i++) loadImage('explode' + i, [`assets/fx/explode${i}.png`, `assets/original/fx/explode${i}.png`]);
 const ready = img => img && img.complete && img.naturalWidth > 0;
 const BOT_WEAPONS = [0, 1, 2, 3, 4, 5, 7, 8, 9];
@@ -433,7 +448,7 @@ let tick = 0;
 function makeSoldier(name, col, x, y, isBot, id) {
   return { id, name, col, C: palette(col), isBot, x, y, tx: x, ty: y, vx: 0, vy: 0, hp: MAX_HEALTH, jet: START_JET, jetting: false, stance: 'stand', wantProne: false, onGround: false, aim: 0, facing: 1,
     wi: 2, lastWi: 0, rollT: -1, rollDir: 1, flipT: -1, jumpDir: 0, flipPending: false, lastKillT: -999, streak: 0, ammo: WEAPONS.map(w => w.mag), reloadT: 0, fireT: 0, startT: 0, flashT: 0, jumpT: -1, dead: false, respawnT: 0, protect: 60, anim: 0, kills: 0, deaths: 0,
-    grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0, hasKnife: true, throwT: 0, flipCool: 0, reloadStart: 0, flipDir: 0, slideT: 0, prevFacing: 0,
+    grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0, hasKnife: true, throwT: 0, armor: 0, flipCool: 0, reloadStart: 0, flipDir: 0, slideT: 0, prevFacing: 0,
     input: {}, ai: { timer: 0, strafe: 1, pref: 250, seen: 0, err: 0, errT: 0, jetting: false, crouch: false, nadeT: 0 } };
 }
 let player = makeSoldier('Você', COLORS[0], 640, 980, false, 'h');
@@ -699,6 +714,7 @@ function shotFx(e, w, mx, my, sx, sy, aim) {
 
 function hurt(t, dmg, src, wname, hx, hy, dirx, diry) {
   if (t.dead || t.protect > 0) return;
+  if (t.armor > 0) { const ab = Math.min(t.armor, dmg * 0.6); t.armor -= ab; dmg -= ab; }
   t.hp -= dmg;
   hitFx(t, src, hx, hy, dirx, diry);
   emit({ t: 'hit', tgt: t.id, src: src && src.id, x: hx, y: hy, dx: dirx, dy: diry });
@@ -770,7 +786,7 @@ function dropWeapon(e) {
 function respawn(e) {
   e.rag = null; e.rollT = -1; e.flipT = -1; e.jumpDir = 0;
   e.dead = false; e.hp = MAX_HEALTH; e.jet = START_JET; e.vx = 0; e.vy = 0; e.protect = 70; e.reloadT = 0; e.fireT = 10; e.startT = 0;
-  e.ammo = WEAPONS.map(w => w.mag); e.grenades = 3; e.stance = 'stand'; e.wantProne = false; e.hasKnife = true; e.throwT = 0;
+  e.ammo = WEAPONS.map(w => w.mag); e.grenades = 3; e.stance = 'stand'; e.wantProne = false; e.hasKnife = true; e.throwT = 0; e.armor = 0;
   if (e.isBot) e.wi = BOT_WEAPONS[Math.random() * BOT_WEAPONS.length | 0];
   unstick(e);
 }
@@ -966,7 +982,7 @@ function playerInput() {
 // ================= Living world: icicles, crates, pickups, lanterns, wind, footprints =================
 // Icicles, crates and pickups change the match, so the host owns them; lanterns, wind, fog and footprints are local visuals.
 const ICICLES = [], CRATES = [], LANTERNS = [], pickups = [];
-const PICKUP_KINDS = ['health', 'ammo', 'grenades'];
+const PICKUP_KINDS = ['health', 'ammo', 'grenades', 'vest', 'fuel'];
 let wind = 0, gustT = 400, gustDir = 1, gustPow = 1, fogX = 0;
 function openBelow(x, y, d) { for (let k = 6; k < d; k += 4) if (solid(x, y + k)) return false; return true; }
 function groundBelow(x, y) { let yy = y; while (yy < H && !solid(x, yy)) yy++; return yy; }
@@ -1029,12 +1045,14 @@ function iceFx(x, y) {
 function applyPickup(t, kind) {
   if (kind === 'health') { if (t.hp >= MAX_HEALTH) return false; t.hp = Math.min(MAX_HEALTH, t.hp + 75); }
   else if (kind === 'ammo') { t.ammo = WEAPONS.map(w => w.mag); t.reloadT = 0; }
+  else if (kind === 'vest') { if (t.armor >= 100) return false; t.armor = 100; }
+  else if (kind === 'fuel') { if (t.jet >= START_JET) return false; t.jet = START_JET; }
   else { if (t.grenades >= 5) return false; t.grenades = 5; }
   return true;
 }
 function pickFx(t, kind) {
   if (!t) return;
-  if (t === player) bigMsg = { text: kind === 'health' ? '+ VIDA' : kind === 'ammo' ? '+ MUNIÇÃO' : kind === 'knife' ? '+ FACA' : '+ GRANADAS', t: 90 };
+  if (t === player) bigMsg = { text: kind === 'health' ? '+ VIDA' : kind === 'ammo' ? '+ MUNIÇÃO' : kind === 'knife' ? '+ FACA' : kind === 'vest' ? '+ COLETE' : kind === 'fuel' ? '+ COMBUSTÍVEL' : '+ GRANADAS', t: 90 };
   noise(.08, 2500, volAt(t.x, t.y) * .4, 'bandpass');
 }
 function damageCrate(k, dmg) {
@@ -1043,7 +1061,7 @@ function damageCrate(k, dmg) {
   if (k.hp > 0) return;
   k.alive = false; k.respawn = 900;
   crateFx(k.x, k.y); emit({ t: 'crate', x: k.x, y: k.y });
-  pickups.push({ x: k.x, y: k.y - 2, vy: -2, kind: PICKUP_KINDS[Math.random() * 3 | 0], life: 1800 });
+  pickups.push({ x: k.x, y: k.y - 2, vy: -2, kind: PICKUP_KINDS[Math.random() * PICKUP_KINDS.length | 0], life: 1800 });
 }
 function crateFx(x, y) {
   for (let i = 0; i < 16; i++) particles.push({ t: 'shell', wood: true, x: x + rnd(-8, 8), y: y - rnd(2, 15), vx: rnd(-2.5, 2.5), vy: rnd(-3.5, -1), life: 120, max: 120, s: 1, r: rnd(0, 6), vr: rnd(-.4, .4) });
@@ -1113,6 +1131,8 @@ function drawLivingWorld() {
   for (const q of pickups) {
     const y = q.y - 7 - Math.max(0, Math.sin(tick * 0.08)) * 1.5;
     ctx.globalAlpha = Math.min(1, q.life / 60);
+    const pim = IMG['pk-' + q.kind];
+    if (ready(pim)) { const ph = q.kind === 'vest' || q.kind === 'fuel' ? 12 : 9.5, pw = pim.naturalWidth * ph / pim.naturalHeight; ctx.drawImage(pim, q.x - pw / 2, y + 7 - ph, pw, ph); continue; }
     ctx.fillStyle = q.kind === 'health' ? '#f2f2f2' : q.kind === 'ammo' ? '#5b6b3a' : '#3d4a2c';
     ctx.fillRect(q.x - 4.5, y, 9, 7);
     if (q.kind === 'health') { ctx.fillStyle = '#d42a2a'; ctx.fillRect(q.x - .8, y + 1.2, 1.6, 4.6); ctx.fillRect(q.x - 2.3, y + 2.7, 4.6, 1.6); }
@@ -1131,6 +1151,15 @@ function drawLivingWorld() {
   for (const L of LANTERNS) {
     const ex = L.x + Math.sin(L.th) * L.len, ey = L.y + Math.cos(L.th) * L.len;
     ctx.strokeStyle = '#2d313a'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(ex, ey); ctx.stroke();
+    const lim = IMG['lantern-hang'];
+    if (ready(lim)) {
+      // crop the lantern body out of the bracket+chain image (lower ~44%)
+      const sy = lim.naturalHeight * .56, sh = lim.naturalHeight - sy, sx = lim.naturalWidth * .3, sw = lim.naturalWidth * .7, lh = 15, lw = sw * lh / sh;
+      ctx.save(); ctx.translate(ex, ey); ctx.rotate(-L.th);
+      ctx.drawImage(lim, sx, sy, sw, sh, -lw / 2, -1, lw, lh);
+      if (L.flick > 0 && Math.random() < .45) { ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(-lw * .3, lh * .35, lw * .6, lh * .45); }
+      ctx.restore(); continue;
+    }
     ctx.save(); ctx.translate(ex, ey); ctx.rotate(-L.th); ctx.scale(1.6, 1.6);
     ctx.fillStyle = '#2d313a'; ctx.fillRect(-2.6, 0, 5.2, 1.6); ctx.fillRect(-2.2, 7.4, 4.4, 1.2);
     ctx.fillStyle = `rgba(255,210,122,${lanternGlow(L)})`; ctx.fillRect(-2, 1.6, 4, 5.8);
@@ -1141,7 +1170,7 @@ function drawLivingWorld() {
 function lanternGlow(L) { return L.flick > 0 ? (Math.random() < .45 ? .2 : 1) : .85 + .15 * Math.sin(tick * .3 + L.x); }
 function drawLanternLights() {
   for (const L of LANTERNS) {
-    const ex = L.x + Math.sin(L.th) * (L.len + 7), ey = L.y + Math.cos(L.th) * (L.len + 7), a = .55 * lanternGlow(L);
+    const ex = L.x + Math.sin(L.th) * (L.len + 9), ey = L.y + Math.cos(L.th) * (L.len + 9), a = .55 * lanternGlow(L);
     const g = ctx.createRadialGradient(ex, ey, 0, ex, ey, 70); g.addColorStop(0, `rgba(255,200,120,${a})`); g.addColorStop(1, 'rgba(255,200,120,0)');
     ctx.fillStyle = g; ctx.fillRect(ex - 70, ey - 70, 140, 140);
   }
@@ -1538,6 +1567,7 @@ function drawHUD() {
   // health: white cross + red bar (bottom left)
   ctx.fillStyle = '#f2f2f2'; ctx.fillRect(X(40), Y(1021), X(30), Y(10)); ctx.fillRect(X(50), Y(1011), X(10), Y(30));
   hudBar(108, 362, 1025, 16, p.hp / MAX_HEALTH, '#d42a2a');
+  if (p.armor > 0) hudBar(108, 362, 1008, 8, p.armor / 100, '#b8c2d4');
   // weapon name, ammo icon, yellow count, segmented ammo bar, thin reload bar, grenades (bottom centre)
   ctx.textAlign = 'right'; ctx.font = F(26); ctx.fillStyle = '#e8e8e8'; ctx.fillText(w.name, X(848), Y(1033));
   ctx.fillStyle = '#d9b44a'; ctx.fillRect(X(862), Y(1022), X(8), Y(22)); ctx.fillRect(X(874), Y(1022), X(8), Y(22)); ctx.fillStyle = '#8a6a2a'; ctx.fillRect(X(862), Y(1018), X(8), Y(5)); ctx.fillRect(X(874), Y(1018), X(8), Y(5));
@@ -1635,7 +1665,7 @@ buildBackground();
 // the world bakes the props into its canvas, so wait (max ~4 s) until every image has loaded or failed
 const bootStart = performance.now();
 (function boot() {
-  const pending = ['pine-large', 'pine-medium', 'pine-small', 'lamp', 'crate', 'rock-small'].some(k => IMG[k] === undefined);
+  const pending = ['pine-large', 'pine-medium', 'pine-small', 'lamp', 'crate', 'rock-small', 'sandbags', 'barrel', 'fence', 'signpost', 'tent', 'watchtower'].some(k => IMG[k] === undefined);
   if (pending && performance.now() - bootStart < 4000) { setTimeout(boot, 50); return; }
   buildWorld(); unstick(player); unstick(bot);
 })();
@@ -1728,7 +1758,7 @@ function packSoldier(e) {
     hp: r2(e.hp), jet: e.jet, wi: e.wi, am: e.ammo[e.wi], reloadT: e.reloadT, dead: e.dead, respawnT: e.respawnT, rollT: e.rollT, rollDir: e.rollDir,
     flipT: e.flipT, jumpDir: e.jumpDir, jumpT: e.jumpT, onGround: e.onGround, jetting: e.jetting, anim: r2(e.anim), protect: e.protect,
     kills: e.kills, deaths: e.deaths, grenades: e.grenades, gCharge: e.gCharge, startT: e.startT,
-    hasKnife: e.hasKnife, throwT: e.throwT, reloadStart: e.reloadStart, flipDir: e.flipDir,
+    hasKnife: e.hasKnife, throwT: e.throwT, armor: r2(e.armor), reloadStart: e.reloadStart, flipDir: e.flipDir,
     rag: e.dead && e.rag ? e.rag.flatMap(q => [r2(q.x), r2(q.y)]) : null };
 }
 function hostSend() {
