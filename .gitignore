@@ -1,0 +1,7 @@
+# raw art sources and reference material (the game only uses the processed files in assets/bg, assets/props, assets/original)
+assets/*.png
+assets/*.mkv
+assets/bg/forest-mountains.png
+
+.claude/
+.vercel/
