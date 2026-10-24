@@ -52,7 +52,7 @@
   <div id="mode-pick"><label>Modo</label><div id="modes"><button data-mode="dm">DEATHMATCH</button><button data-mode="dove">POMBA DE OURO</button><button data-mode="ctf">BANDEIRA</button></div>
     <div id="ctf-opts" hidden><label for="ctf-target">Capturas para vencer</label><input id="ctf-target" type="number" min="1" max="10" value="3"></div></div>
   <button id="join" hidden>ENTRAR NA SALA</button>
-  <div id="fixed-rooms"><label>Salas fixas (sem link)</label><div id="rooms"></div></div>
+  <div id="fixed-rooms"><label>Sala fixa (sem link)</label><div id="rooms"></div></div>
   <button id="play">TREINAR COM BOT</button>
   <button id="host" class="alt">CRIAR SALA (JOGAR COM AMIGO)</button>
   <div id="room" hidden></div>
@@ -3173,7 +3173,7 @@ function joinRoom(code) {
 }
 // fixed rooms: the first to click hosts the code, whoever clicks next joins it. A room is whatever map and mode are selected above,
 // and the code is derived from room + map + mode, so each combination is its own room that never clashes with another.
-const ROOMS = [{ label: 'SALA 1' }, { label: 'SALA 2' }];
+const ROOMS = [{ label: 'SALA 1' }];
 const MAP_LABEL = { inverno: 'Inverno', vulcao: 'Vulcão', selva: 'Selva', ruinas: 'Ruínas' }, MODE_LABEL = { dm: 'Deathmatch', dove: 'Pomba de Ouro', ctf: 'Bandeira' };
 const roomCodeFor = i => 'SL' + 'ABCDEFGH'[i] + MAP_ID[0].toUpperCase() + ({ dm: 'D', dove: 'P', ctf: 'C' }[selMode] || 'D') + 'X';
 function refreshRooms() { ROOMS.forEach((r, i) => { r.btn.innerHTML = `${r.label}<br><small style="font-size:13px;font-weight:600">${MAP_LABEL[MAP_ID]} · ${MODE_LABEL[selMode]}</small>`; }); }
