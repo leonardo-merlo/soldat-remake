@@ -3163,7 +3163,7 @@ function joinRoom(code) {
     try { if (hostConn) hostConn.close(); } catch (err) { /* ignore */ }
     me.destroy(); hostConn = null;
     netMode = 'solo'; if (!soldiers.includes(player)) soldiers.push(player); if (!soldiers.includes(bot)) soldiers.push(bot);
-    if (fixedRoom && ++joinTries <= 2) { roomStatus(`Sala sem resposta (${why}). Assumindo a sala...`); hostRoom(); return; }
+    if (fixedRoom && ++joinTries <= 3) { roomStatus(why === 'sala não encontrada' ? 'Criando a sala...' : `Sala sem resposta (${why}). Assumindo a sala...`); hostRoom(); return; }
     $('fixed-rooms').hidden = false; $('join').hidden = !roomCode;
     roomStatus(`Não consegui entrar na sala (${why}). Tente de novo em instantes ou use a outra sala.`);
   };
@@ -3188,7 +3188,8 @@ const roomCodeFor = i => 'SL' + 'ABCDEFGH'[i] + 'X';
 function refreshRooms() { ROOMS.forEach((r, i) => { r.btn.innerHTML = `${r.label}<br><small style="font-size:13px;font-weight:600">entra se já houver jogo; senão cria: ${MAP_LABEL[MAP_ID]} · ${MODE_LABEL[selMode]}</small>`; }); }
 ROOMS.forEach((r, i) => {
   r.btn = document.createElement('button');
-  r.btn.onclick = () => { fixedRoom = roomCodeFor(i); $('fixed-rooms').hidden = true; hostRoom(); };
+  // like the invite link: try to JOIN first with a clean peer; only if nobody is hosting the code (peer-unavailable) create it
+  r.btn.onclick = () => { fixedRoom = roomCodeFor(i); joinTries = 0; $('fixed-rooms').hidden = true; joinRoom(fixedRoom); };
   $('rooms').appendChild(r.btn);
 });
 refreshRooms();
