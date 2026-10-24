@@ -837,17 +837,47 @@ function noise(dur, freq, vol, type = 'lowpass', sends = null) {
   if (sends) for (const [node, k] of sends) { const sg = AC.createGain(); sg.gain.value = k; g.connect(sg); sg.connect(node); }
 }
 function volAt(x, y) { const p = player; return clamp(1 - Math.hypot(x - p.x, y - p.y) / 1500, 0, 1); }
-// Barrett: bright supersonic crack + low thump, most of the tail in the reverb and echo so it sounds open, not boxed in
+// Gunshots are layered: a sharp crack (highpass noise), the body of the shot (bandpass noise), a low thump (sine sweep) and a tail that
+// goes into the open-air reverb / valley echo. Each weapon has its own mix, so a pistol, an AK, an LMG and a sniper do not sound alike.
+// crack/body/tail: [filter Hz, seconds, volume]; thump: [start Hz, end Hz, seconds, volume]; wet: [reverb send, echo send]
+const GUN_SND = {
+  Deagle: { crack: [3600, .05, .9], body: [1500, .14, .8], thump: [170, 60, .2, .7], tail: [1800, .45, .45], wet: [.5, .08] },
+  MP5: { crack: [5200, .03, .7], body: [2200, .06, .55], thump: [240, 110, .08, .35], tail: [3000, .18, .22], wet: [.25, 0] },
+  'AK-74': { crack: [3000, .06, .95], body: [900, .13, 1], thump: [130, 50, .17, .75], tail: [1400, .4, .5], wet: [.55, .12] },
+  AUG: { crack: [4400, .045, .8], body: [1500, .08, .65], thump: [190, 80, .1, .45], tail: [2500, .22, .3], wet: [.3, .04] },
+  Spas: { crack: [1800, .05, .6], body: [600, .22, 1.1], thump: [95, 38, .32, 1], tail: [900, .55, .6], wet: [.8, .1] },
+  Ruger: { crack: [3400, .08, 1], body: [1200, .16, .75], thump: [105, 45, .22, .8], tail: [1800, .6, .55], wet: [.8, .22] },
+  M79: { crack: [900, .03, .3], body: [420, .2, 1], thump: [200, 55, .3, 1], tail: [500, .3, .35], wet: [.4, 0] },
+  Minimi: { crack: [3200, .05, .85], body: [750, .1, 1], thump: [115, 55, .12, .7], tail: [1500, .22, .3], wet: [.35, .03] },
+  Minigun: { crack: [2600, .025, .45], body: [650, .05, .8], thump: [100, 55, .06, .5], tail: [1200, .1, .18], wet: [.12, 0] },
+};
+function gunSound(prof, x, y, loud = 1) {
+  const v = volAt(x, y) * loud * (.92 + Math.random() * .16), far = 1 - volAt(x, y);
+  if (v <= .01) return;
+  const wet = [[reverbIn, prof.wet[0] * (1 + far)], [echoIn, prof.wet[1] * (1 + far)]];
+  noise(prof.crack[1], prof.crack[0], v * prof.crack[2], 'highpass', wet);
+  noise(prof.body[1], prof.body[0], v * prof.body[2] * .8, 'bandpass', wet);
+  noise(prof.tail[1], prof.tail[0], v * prof.tail[2], 'lowpass', wet);
+  if (!AC) return;
+  const [f0, f1, dur, tv] = prof.thump, o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(v * tv, t); g.gain.exponentialRampToValueAtTime(.001, t + dur + .04);
+  o.connect(g); g.connect(master); const sg = AC.createGain(); sg.gain.value = prof.wet[0]; g.connect(sg); sg.connect(reverbIn);
+  o.start(t); o.stop(t + dur + .06);
+}
+// Barrett .50: very loud, wide open report with a bright supersonic crack, a booming body, a deep thump and a long, light echo in the valley
 function sfxBarrett(x, y) {
-  const v = volAt(x, y), far = 1 - v, wet = [[reverbIn, .7 + far * .8], [echoIn, .5 + far * .6]];
-  noise(.09, 2500, v * 1.1, 'highpass', wet);
-  noise(.6, 4200, v * .95, 'lowpass', wet);
-  if (!AC || v <= .01) return;
+  const v = volAt(x, y), far = 1 - v, wet = [[reverbIn, 1 + far * .9], [echoIn, .32 + far * .35]];
+  if (v <= .01) return;
+  noise(.14, 1800, v * 1.15, 'highpass', wet);
+  noise(.5, 700, v * .85, 'bandpass', wet);
+  noise(1.1, 2600, v * .5, 'lowpass', wet);
+  if (!AC) return;
   const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
-  o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(38, t + .35);
-  g.gain.setValueAtTime(v * .9, t); g.gain.exponentialRampToValueAtTime(.001, t + .45);
-  o.connect(g); g.connect(master); const sg = AC.createGain(); sg.gain.value = .5; g.connect(sg); sg.connect(reverbIn);
-  o.start(t); o.stop(t + .5);
+  o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(28, t + .5);
+  g.gain.setValueAtTime(v * 1.05, t); g.gain.exponentialRampToValueAtTime(.001, t + .6);
+  o.connect(g); g.connect(master); const sg = AC.createGain(); sg.gain.value = .7; g.connect(sg); sg.connect(reverbIn);
+  o.start(t); o.stop(t + .65);
 }
 function sfxShot(w, x, y) {
   if (w.kind === 'sniper') { sfxBarrett(x, y); return; }
@@ -855,7 +885,9 @@ function sfxShot(w, x, y) {
   if (w.kind === 'portal') { blip(900, 400, .18, .2, 'sine', x, y); return; }
   if (w.kind === 'cryo') { noise(.07, 7000, volAt(x, y) * .16, 'highpass'); return; }
   if (w.kind === 'blackhole') { blip(120, 40, .5, .3, 'sine', x, y); return; }
-  const v = volAt(x, y); const heavy = !!w.pellets; noise(heavy ? .35 : w.kind === 'tube' ? .2 : .1, heavy ? 1200 : w.kind === 'pistol' ? 2200 : 3000, v * (heavy ? 1 : .55));
+  const prof = GUN_SND[w.short];
+  if (prof) gunSound(prof, x, y, w.double ? 1.25 : 1);
+  else noise(.1, 3000, volAt(x, y) * .55);
 }
 function sfxBoom(x, y) { const v = volAt(x, y); noise(.9, 380, v * 1.3); noise(.25, 1600, v * .5); }
 function sfxHit() { noise(.05, 4000, .25, 'highpass'); }
