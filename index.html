@@ -20,11 +20,13 @@
   #overlay button.alt{background:transparent;color:#ffd27a;border:2px solid #ffd27a}
   #overlay [hidden]{display:none}
   #overlay label{display:block;font-size:16px;color:#aab4d6;margin-bottom:6px}
+  #ctf-target{width:100%;box-sizing:border-box;padding:8px 12px;font:600 20px Rajdhani,sans-serif;color:#e8ecf8;background:rgba(255,255,255,.06);border:1px solid rgba(160,180,255,.3);border-radius:8px}
+  #ctf-opts{margin-top:10px}
   #nick{width:100%;box-sizing:border-box;padding:10px 12px;font:600 20px Rajdhani,sans-serif;color:#e8ecf8;background:rgba(255,255,255,.06);border:1px solid rgba(160,180,255,.3);border-radius:8px}
   #colors{display:flex;gap:10px;margin:12px 0 4px;flex-wrap:wrap}
   #colors button{width:36px;height:36px;margin:0;padding:0;border-radius:50%;border:3px solid transparent}
   #colors button.on{border-color:#fff;box-shadow:0 0 0 2px #0b1020 inset}
-  #maps{display:flex;gap:10px;margin:10px 0 0}
+  #maps{display:flex;gap:8px;margin:10px 0 0}
   #overlay #maps button{flex:1;margin:0;padding:8px;font-size:18px;background:transparent;color:#ffd27a;border:2px solid rgba(255,210,122,.5)}
   #overlay #maps button.on{background:#ffd27a;color:#0b1020;border-color:#ffd27a}
   #modes{display:flex;gap:10px;margin:10px 0 0}
@@ -44,8 +46,9 @@
   <label for="nick">Nome</label>
   <input id="nick" maxlength="12" autocomplete="off">
   <div id="colors"></div>
-  <div id="map-pick"><label>Mapa</label><div id="maps"><button data-map="inverno">INVERNO</button><button data-map="vulcao">VULCÃO</button></div></div>
-  <div id="mode-pick"><label>Modo</label><div id="modes"><button data-mode="dm">DEATHMATCH</button><button data-mode="dove">POMBA DE OURO</button></div></div>
+  <div id="map-pick"><label>Mapa</label><div id="maps"><button data-map="inverno">INVERNO</button><button data-map="vulcao">VULCÃO</button><button data-map="selva">SELVA</button><button data-map="ruinas">RUÍNAS</button></div></div>
+  <div id="mode-pick"><label>Modo</label><div id="modes"><button data-mode="dm">DEATHMATCH</button><button data-mode="dove">POMBA DE OURO</button><button data-mode="ctf">BANDEIRA</button></div>
+    <div id="ctf-opts" hidden><label for="ctf-target">Capturas para vencer</label><input id="ctf-target" type="number" min="1" max="10" value="3"></div></div>
   <button id="join" hidden>ENTRAR NA SALA</button>
   <button id="play">TREINAR COM BOT</button>
   <button id="host" class="alt">CRIAR SALA (JOGAR COM AMIGO)</button>
@@ -118,15 +121,23 @@ function makeNoise(size, seed) {
 }
 
 // ================= Map =================
-// Two maps share the engine: 'inverno' (snow, icicles, aurora) and 'vulcao' (basalt, falling rocks, lava pools).
+// Four maps share the engine: 'inverno' (snow, icicles, aurora) and 'vulcao' (basalt, falling rocks, lava pools) are the big
+// ground maps; 'selva' (small, closed cave) and 'ruinas' (medium, water below kills) are centred arenas of floating platforms.
 // The host's invite link carries ?mapa=, so guests build the same world.
+const MAP_IDS = ['inverno', 'vulcao', 'selva', 'ruinas'];
 const MAP_ID = (() => {
   const q = new URLSearchParams(location.search).get('mapa');
-  if (q === 'vulcao' || q === 'inverno') return q;
-  try { return localStorage.getItem('sr-map') === 'vulcao' ? 'vulcao' : 'inverno'; } catch (err) { return 'inverno'; }
+  if (MAP_IDS.includes(q)) return q;
+  try { const m = localStorage.getItem('sr-map'); return MAP_IDS.includes(m) ? m : 'inverno'; } catch (err) { return 'inverno'; }
 })();
 const VOLCANO = MAP_ID === 'vulcao';
-const W = 3200, H = 1500;
+const ARENA = MAP_ID === 'selva' || MAP_ID === 'ruinas';
+const [W, H] = { inverno: [3200, 1500], vulcao: [3200, 1500], selva: [1900, 1000], ruinas: [2600, 1150] }[MAP_ID];
+// arena look: sky colours, rock base + amplitude (r, g, b, dr, dg, db), colour of the top crust, cloud tint
+const THEME = {
+  ruinas: { sky: ['#3c8fd0', '#8dc9ee', '#f3dfb6'], rock: [150, 92, 60, 64, 52, 38], top: [228, 192, 122], cloud: '255,255,255,.5', vig: 'rgba(40,20,5,.35)' },
+  selva: { sky: ['#0f3d2a', '#2b8556', '#c0e6a0'], rock: [40, 54, 34, 52, 58, 38], top: [92, 150, 58], cloud: '190,255,200,.16', vig: 'rgba(0,18,6,.5)' },
+}[MAP_ID];
 const ROCK = 1, WOOD = 2, CONC = 3;
 const rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 function groundHVolcano(x) {
@@ -147,22 +158,62 @@ function groundH(x) {
   return h;
 }
 const POLYS = [];
-{ const gp = []; for (let x = 0; x <= W; x += 20) gp.push([x, groundH(x)]); gp.push([W, H], [0, H]); POLYS.push({ m: ROCK, p: gp }); }
-POLYS.push({ m: ROCK, p: [[0, 150], [70, 170], [130, 330], [120, 520], [175, 690], [150, 860], [215, 1040], [240, 1200], [0, 1300]] });
+if (!ARENA) {
+  const gp = []; for (let x = 0; x <= W; x += 20) gp.push([x, groundH(x)]); gp.push([W, H], [0, H]); POLYS.push({ m: ROCK, p: gp });
+  POLYS.push({ m: ROCK, p: [[0, 150], [70, 170], [130, 330], [120, 520], [175, 690], [150, 860], [215, 1040], [240, 1200], [0, 1300]] });
+}
+const mirrorPoly = p => p.map(([x, y]) => [W - x, y]).reverse();
+const symm = (m, p) => { POLYS.push({ m, p }, { m, p: mirrorPoly(p) }); }; // arenas are left/right symmetric
 // per-map layout: spawns, crate spots, hanging-lantern columns, the plank-textured bridge, lava pools
-const MAP = VOLCANO ? {
+// spawns: x for the ground maps (y comes from groundH), [x, y above the platform] for the arenas. flags: [x, y above the base] per team.
+const MAP = MAP_ID === 'selva' ? {
+  spawns: [[260, 410], [1640, 410], [330, 840], [1570, 840], [950, 620]],
+  crates: [[400, 250], [1500, 250], [950, 300], [950, 620], [560, 440], [1340, 440], [240, 780], [1660, 780]],
+  lanterns: [], planks: null, lava: [], pit: 0,
+  flags: [[255, 400], [1645, 400]], waterfall: { x: 950, y0: 345, y1: 925, w: 44 },
+} : MAP_ID === 'ruinas' ? {
+  spawns: [[330, 500], [2270, 500], [690, 860], [1910, 860], [1300, 410]],
+  crates: [[400, 480], [2200, 480], [1300, 400], [700, 840], [1900, 840], [1300, 770], [700, 260], [1900, 260]],
+  lanterns: [], planks: null, lava: [], pit: 1030, pitName: 'Água',
+  flags: [[330, 500], [2270, 500]],
+} : VOLCANO ? {
   spawns: [640, 2950, 2200, 1000, 2450],
   crates: [[700, 880], [600, 1200], [1000, 1200], [1550, 840], [1770, 620], [1260, 700], [1600, 1180], [2200, 1200], [2450, 1060], [2700, 985], [2600, 600], [2950, 1200], [330, 640], [940, 670]],
   lanterns: [560, 800, 1000, 2350, 2500, 2850],
   planks: { x: 1300, y: 1196, w: 600, h: 14 },
   lava: [{ x0: 1250, x1: 1950, y: 1296 }, { x0: 2540, x1: 2820, y: 1282 }],
+  flags: [[700, 850], [2950, 450]],
 } : {
   spawns: [640, 2600, 1900, 2300],
   crates: [[560, 900], [1380, 880], [1690, 620], [2050, 1100], [2450, 1000], [2700, 380], [330, 600], [905, 600], [640, 1010], [1060, 1010], [1790, 1100], [2290, 1000], [2880, 1000], [420, 1000]],
   lanterns: [335, 905, 1545, 2240, 2560, 2860],
   planks: { x: 470, y: 985, w: 800, h: 14 },
   lava: [],
+  flags: [[560, 900], [2850, 300]],
 };
+if (MAP_ID === 'selva') {
+  // closed jungle cave: walls and floor, hanging rocks, mossy logs, tree-house platforms and a waterfall pool in the middle
+  symm(ROCK, [[0, 0], [300, 0], [330, 70], [270, 150], [200, 230], [150, 350], [130, 480], [160, 600], [110, 720], [0, 760]]);
+  symm(ROCK, [[560, 0], [760, 0], [740, 50], [650, 90], [580, 60]]);
+  POLYS.push({ m: ROCK, p: [[0, H], [0, 880], [160, 860], [330, 880], [520, 905], [700, 890], [800, 860], [860, 930], [1040, 930], [1100, 860], [1200, 890], [1380, 905], [1570, 880], [1740, 860], [1900, 880], [1900, H]] });
+  symm(ROCK, [[260, 300], [450, 262], [520, 285], [480, 320], [330, 345]]);
+  symm(ROCK, [[330, 560], [520, 470], [610, 455], [640, 490], [540, 540], [360, 610]]);
+  symm(ROCK, [[300, 720], [430, 690], [560, 720], [520, 760], [380, 765]]);
+  symm(ROCK, [[780, 470], [850, 455], [900, 480], [870, 505], [800, 505]]);
+  symm(WOOD, rect(180, 430, 140, 12));
+  POLYS.push({ m: WOOD, p: rect(830, 330, 240, 12) }, { m: WOOD, p: rect(850, 640, 200, 12) }, { m: WOOD, p: rect(700, 160, 500, 12) });
+} else if (MAP_ID === 'ruinas') {
+  // desert ruins over water: a long beam across the top, two big side pillars with ledges, a central pillar with decks
+  POLYS.push({ m: ROCK, p: [[150, 160], [1300, 185], [2450, 160], [2450, 215], [1300, 240], [150, 215]] });
+  symm(ROCK, [[0, 120], [190, 110], [240, 180], [230, 330], [190, 520], [200, 700], [270, 860], [340, 960], [420, 1030], [430, H], [0, H]]);
+  symm(ROCK, [[230, 560], [420, 520], [520, 560], [470, 600], [250, 620]]);
+  symm(ROCK, [[480, 380], [760, 300], [860, 300], [880, 340], [780, 380], [520, 450]]);
+  symm(ROCK, [[500, 760], [700, 740], [850, 790], [800, 830], [600, 820], [500, 800]]);
+  symm(ROCK, [[600, 260], [690, 260], [680, 330], [610, 330]]);
+  POLYS.push({ m: ROCK, p: [[1180, 240], [1420, 240], [1400, 340], [1390, 640], [1420, 780], [1180, 780], [1210, 640], [1200, 340]] });
+  POLYS.push({ m: WOOD, p: rect(1100, 430, 400, 16) }, { m: WOOD, p: rect(1100, 800, 400, 16) });
+  symm(WOOD, rect(560, 880, 260, 18));
+}
 if (VOLCANO) {
   POLYS.push({ m: CONC, p: rect(250, 660, 150, 34) });
   POLYS.push({ m: CONC, p: rect(300, 820, 170, 30) });
@@ -181,7 +232,7 @@ if (VOLCANO) {
   POLYS.push({ m: ROCK, p: [[2150, 700], [2250, 660], [2450, 640], [2650, 655], [2850, 620], [3050, 590], [W, 580], [W, 1300], [3080, 1300], [3050, 1150], [3010, 1000], [3040, 880], [2950, 820], [2800, 800], [2600, 812], [2420, 790], [2300, 770], [2200, 745]] });
   POLYS.push({ m: CONC, p: rect(2380, 1080, 150, 16) });
   POLYS.push({ m: CONC, p: rect(2650, 1000, 120, 14) });
-} else {
+} else if (!ARENA) {
 POLYS.push({ m: CONC, p: rect(250, 640, 150, 36) });
 POLYS.push({ m: CONC, p: rect(300, 760, 170, 34) });
 POLYS.push({ m: WOOD, p: rect(470, 985, 800, 14) });
@@ -259,6 +310,14 @@ function buildWorld() {
         else if (vein > 0.15) { od[j] = 255; od[j + 1] = 120; od[j + 2] = 30; od[j + 3] = 230 * vein; }
         else if (heat > 0.05) { od[j] = 255; od[j + 1] = 110; od[j + 2] = 30; od[j + 3] = 120 * heat; }
         else if (db < 10 || dt >= 30) { od[j] = 12; od[j + 1] = 6; od[j + 2] = 8; od[j + 3] = (1 - sh) * 255; }
+      } else if (mt === ROCK && ARENA) {
+        const T = THEME, tt = n * 0.55 + s2 * 0.45;
+        r = T.rock[0] + T.rock[3] * tt; g = T.rock[1] + T.rock[4] * tt; b = T.rock[2] + T.rock[5] * tt;
+        if (Math.abs(s2 - 0.5) < 0.012) { r *= 0.8; g *= 0.8; b *= 0.8; }
+        let sh = 1 - Math.min(dt, 140) / 140 * 0.4;
+        if (db < 10) sh *= 0.5 + db * 0.05;
+        r *= sh; g *= sh; b *= sh;
+        if (dt < snowT * 0.8) { const k = 1 - dt / (snowT * 0.8) * 0.25; r = T.top[0] * k + 24 * n; g = T.top[1] * k + 20 * n; b = T.top[2] * k + 10 * n; }
       } else if (mt === ROCK) {
         const tt = n * 0.55 + s2 * 0.45;
         r = 66 + 74 * tt; g = 72 + 76 * tt; b = 90 + 82 * tt;
@@ -276,11 +335,12 @@ function buildWorld() {
         const gr = N1[((x >> 3) & 255) | (((y * 5) & 255) << 8)];
         r = 104 + 46 * gr; g = 70 + 30 * gr; b = 46 + 18 * gr;
         if (x % 32 < 2 || db < 2) { r *= 0.55; g *= 0.55; b *= 0.55; }
-        if (dt < 3) { if (VOLCANO) { r = 112; g = 102; b = 98; } else { r = 225; g = 234; b = 248; } }
+        if (dt < 3) { if (VOLCANO) { r = 112; g = 102; b = 98; } else if (ARENA) { r = 190; g = 160; b = 110; } else { r = 225; g = 234; b = 248; } }
       } else {
         const v = 128 + 52 * n - 30 * (s2 > 0.7 ? s2 - 0.7 : 0) * 4;
         r = v; g = v + 3; b = v + 12;
         if (VOLCANO) { r = v * .72; g = v * .66; b = v * .64; }
+        else if (ARENA) { r = v * 1.05; g = v * .9; b = v * .75; }
         if (db < 3 || x % 48 < 1) { r *= 0.6; g *= 0.6; b *= 0.6; }
         if (dt < 4) { if (VOLCANO) { r = 108; g = 100; b = 96; } else { r = 222; g = 232; b = 248; } }
       }
@@ -304,6 +364,7 @@ function buildWorld() {
     w.save(); w.translate(x, base); if (flip) w.scale(-1, 1); w.drawImage(im, -pw / 2, -h, pw, h); w.restore();
   };
   if (VOLCANO) decorateVolcano(w, tc, surf, rng, placeProp);
+  else if (ARENA) decorateArena(w, tc, surf, rng, placeProp);
   else {
   // pines on the topmost rock surfaces
   for (let x = 20; x < W - 20; x += 2) {
@@ -376,6 +437,83 @@ function buildWorld() {
   }
   worldCanvas = wc;
   buildLivingWorld();
+}
+function decorateArena(w, tc, surf, rng, placeProp) {
+  const jungle = MAP_ID === 'selva';
+  if (jungle) {
+    // vines and roots hanging under the platforms, drawn behind the rock layer
+    for (let x = 6; x < W - 6; x += 5) for (let y = 4; y < H - 80; y++) {
+      const i = y * W + x;
+      if (mask[i] && !mask[i + W] && rng() < .05) {
+        const len = 14 + rng() * 60; let vx = x;
+        w.strokeStyle = rng() < .5 ? '#1f5a30' : '#2c7a3a'; w.lineWidth = 1.2 + rng(); w.beginPath(); w.moveTo(x, y);
+        for (let k = 1; k <= 6; k++) { vx += (rng() - .5) * 3; w.lineTo(vx, y + len * k / 6); } w.stroke();
+        w.fillStyle = '#4fb04a'; for (let k = 2; k <= 6; k += 2) { w.beginPath(); w.ellipse(vx + (rng() - .5) * 4, y + len * k / 6, 2.4, 1.3, rng() * 3, 0, 7); w.fill(); }
+      }
+    }
+  } else {
+    // wooden posts holding the decks and rope rails
+    w.fillStyle = '#5a3d26';
+    for (const px of [1135, 1465]) w.fillRect(px - 4, 446, 8, 354);
+    for (const px of [610, 770, 1830, 1990]) w.fillRect(px - 4, 898, 8, 150);
+    w.strokeStyle = 'rgba(70,48,30,.9)'; w.lineWidth = 2;
+    for (const [a, b] of [[1100, 1500]]) { w.beginPath(); w.moveTo(a, 424); w.quadraticCurveTo((a + b) / 2, 440, b, 424); w.stroke(); }
+  }
+  w.drawImage(tc, 0, 0);
+  if (jungle) {
+    // grass tufts, ferns and mushrooms on the top surfaces
+    for (let x = 4; x < W - 4; x += 2) {
+      if (mask[surf[x] * W + x] && rng() < .22) {
+        const y = surf[x], h = 3 + rng() * 7; w.strokeStyle = rng() < .5 ? '#3f9a3e' : '#63c04c'; w.lineWidth = 1; w.beginPath(); w.moveTo(x, y + 1); w.quadraticCurveTo(x + (rng() - .5) * 4, y - h * .6, x + (rng() - .5) * 6, y - h); w.stroke();
+      }
+    }
+    for (let x = 30; x < W - 30; x += 26) if (rng() < .3 && mask[surf[x] * W + x]) { const y = surf[x]; w.fillStyle = '#e8d8c0'; w.fillRect(x - .8, y - 4, 1.6, 4); w.fillStyle = rng() < .5 ? '#d8483a' : '#e6a23a'; w.beginPath(); w.ellipse(x, y - 4, 3.2, 2, 0, Math.PI, 0); w.fill(); }
+    // tree-house roof over the left and right platforms
+    for (const rx of [180, W - 320]) { w.fillStyle = '#3a2a1c'; w.fillRect(rx, 300, 5, 130); w.fillRect(rx + 135, 300, 5, 130); w.fillStyle = '#2f6a3a'; w.beginPath(); w.moveTo(rx - 12, 304); w.lineTo(rx + 70, 262); w.lineTo(rx + 152, 304); w.fill(); }
+    // waterfall base, painted static; the moving streaks are drawn every frame
+    const F = MAP.waterfall; w.fillStyle = 'rgba(120,200,230,.5)'; w.fillRect(F.x - F.w / 2, F.y0, F.w, F.y1 - F.y0);
+  } else {
+    // sandstone cracks and a few blocks lying on the ledges
+    w.strokeStyle = 'rgba(60,30,15,.35)'; w.lineWidth = 1;
+    for (let k = 0; k < 160; k++) { const x = rng() * W, y = rng() * H; if (!mask[(y | 0) * W + (x | 0)] || mask[(y | 0) * W + (x | 0)] !== ROCK) continue; w.beginPath(); w.moveTo(x, y); w.lineTo(x + (rng() - .5) * 30, y + (rng() - .2) * 24); w.stroke(); }
+    for (const [bx, by] of [[520, 538], [2080, 538], [1230, 238], [1370, 238]]) { placeProp('sandbags', bx, 18, rng() < .5, by - 30); }
+    placeProp('barrel', 470, 22, false, 500); placeProp('barrel', 2130, 22, false, 500);
+  }
+  if (jungle) for (let x = 90; x < W; x += 210) LIGHTS.push({ x, y: 300 + (x % 3) * 220, r: 110, c: '150,255,160', a: .16 });
+}
+function buildArenaBackground(rng) {
+  const jungle = MAP_ID === 'selva';
+  if (!jungle) {
+    // far pale mesas and dunes
+    { const h = 420, c = mkCanvas(2048, h), g = c.getContext('2d'), a = ridge(2048, 0.58, rng);
+      const gr = g.createLinearGradient(0, 120, 0, h); gr.addColorStop(0, '#dcc39a'); gr.addColorStop(1, '#c2a07a');
+      g.fillStyle = gr; g.beginPath(); g.moveTo(0, h);
+      for (let x = 0; x <= 2048; x += 2) { const mesa = Math.sin(x / 190) > .55 ? 60 : 0; g.lineTo(x, 160 + (1 - a[x]) * 140 - mesa); }
+      g.lineTo(2048, h); g.fill();
+      const hz = g.createLinearGradient(0, h * .4, 0, h); hz.addColorStop(0, 'rgba(240,225,190,0)'); hz.addColorStop(1, 'rgba(240,225,190,.6)'); g.fillStyle = hz; g.fillRect(0, 0, 2048, h);
+      BG.push({ img: c, f: 0.06, A: 900, row: h, bottom: '#c2a07a' }); }
+    // nearer orange mesas with small arches
+    { const h = 360, c = mkCanvas(2048, h), g = c.getContext('2d'), a = ridge(2048, 0.6, rng);
+      const gr = g.createLinearGradient(0, 80, 0, h); gr.addColorStop(0, '#b8774a'); gr.addColorStop(1, '#7c4a2e');
+      g.fillStyle = gr; g.beginPath(); g.moveTo(0, h);
+      for (let x = 0; x <= 2048; x += 2) g.lineTo(x, 120 + (1 - a[x]) * 150);
+      g.lineTo(2048, h); g.fill();
+      g.fillStyle = '#6a3e26'; for (const ax of [260, 820, 1430, 1900]) { g.beginPath(); g.moveTo(ax - 40, h - 60); g.lineTo(ax - 40, 170); g.quadraticCurveTo(ax, 120, ax + 40, 170); g.lineTo(ax + 40, h - 60); g.lineTo(ax + 22, h - 60); g.lineTo(ax + 22, 190); g.quadraticCurveTo(ax, 160, ax - 22, 190); g.lineTo(ax - 22, h - 60); g.fill(); }
+      BG.push({ img: c, f: 0.12, A: 1010, row: h, bottom: '#7c4a2e' }); }
+  } else {
+    // far canopy with light shafts
+    { const h = 460, c = mkCanvas(2048, h), g = c.getContext('2d'), a = ridge(2048, 0.55, rng);
+      g.fillStyle = '#1b5f3c'; g.beginPath(); g.moveTo(0, h); for (let x = 0; x <= 2048; x += 3) g.lineTo(x, 80 + (1 - a[x]) * 170); g.lineTo(2048, h); g.fill();
+      g.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 9; i++) { const x = rng() * 2048, wd = 30 + rng() * 60, sk = 90 + rng() * 80, gg = g.createLinearGradient(0, 0, 0, h); gg.addColorStop(0, 'rgba(210,255,170,.28)'); gg.addColorStop(1, 'rgba(210,255,170,0)'); g.fillStyle = gg; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + wd, 0); g.lineTo(x + wd - sk, h); g.lineTo(x - sk, h); g.fill(); }
+      g.globalCompositeOperation = 'source-over';
+      BG.push({ img: c, f: 0.06, A: 820, row: h, bottom: '#1b5f3c' }); }
+    // trunks and hanging vines
+    { const h = 420, c = mkCanvas(2048, h), g = c.getContext('2d');
+      for (let i = 0; i < 26; i++) { const x = rng() * 2048, wd = 16 + rng() * 34; g.fillStyle = `rgba(${14 + rng() * 10 | 0},${50 + rng() * 22 | 0},${30 + rng() * 14 | 0},.95)`; g.fillRect(x, 0, wd, h); }
+      for (let i = 0; i < 70; i++) { const x = rng() * 2048, len = 60 + rng() * 240; g.strokeStyle = '#1d6a3a'; g.lineWidth = 1.5 + rng() * 1.5; g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + 10, len * .3, x - 10, len * .6, x + 4, len); g.stroke(); }
+      BG.push({ img: c, f: 0.13, A: 960, row: h, bottom: '#0e3a26' }); }
+  }
 }
 function decorateVolcano(w, tc, surf, rng, placeProp) {
   // charred trees on the top surfaces
@@ -492,13 +630,15 @@ function buildBackground() {
       const x = rng() * 2048, y = 120 + rng() * 260, rx = 60 + rng() * 180, ry = 14 + rng() * 30;
       for (const ox of [0, -2048, 2048]) {
         const gr = g.createRadialGradient(x + ox, y, 0, x + ox, y, rx);
-        if (VOLCANO) { gr.addColorStop(0, `rgba(${70 + rng() * 40 | 0},${30 + rng() * 20 | 0},${28 + rng() * 14 | 0},.45)`); gr.addColorStop(1, 'rgba(60,25,22,0)'); }
+        if (ARENA) { gr.addColorStop(0, `rgba(${THEME.cloud})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); }
+        else if (VOLCANO) { gr.addColorStop(0, `rgba(${70 + rng() * 40 | 0},${30 + rng() * 20 | 0},${28 + rng() * 14 | 0},.45)`); gr.addColorStop(1, 'rgba(60,25,22,0)'); }
         else { gr.addColorStop(0, `rgba(${230 + rng() * 25 | 0},${170 + rng() * 40 | 0},${170 + rng() * 40 | 0},.30)`); gr.addColorStop(1, 'rgba(200,150,170,0)'); }
         g.fillStyle = gr; g.save(); g.translate(x + ox, y); g.scale(1, ry / rx); g.translate(-x - ox, -y); g.beginPath(); g.arc(x + ox, y, rx, 0, 7); g.fill(); g.restore();
       }
     }
     BG.push({ img: c, f: 0.03, A: 650, row: 400, bottom: null }); }
   if (VOLCANO) { buildVolcanoBackground(rng); return; }
+  if (ARENA) { buildArenaBackground(rng); return; }
   // mountains
   const mtn = (h, top, range, snowLine, c1, c2, f, A, rough) => {
     const c = mkCanvas(2048, h), g = c.getContext('2d'), a = ridge(2048, rough, rng);
@@ -645,17 +785,19 @@ loadImage('frag-grenade', ['assets/weapons/frag-grenade.png', 'assets/original/w
 // painted parallax layers (row = image row anchored to the layer's world height A; s = world units per image pixel)
 // volcano map: drop volcano-far.png / volcano-mid.png (2172x724, transparent sky) and basalt.png (seamless tile) into
 // assets/bg/ and they replace the code-drawn layers; until then the procedural versions are used
-const PAINTED = VOLCANO ? [
+const PAINTED = ARENA ? [] : VOLCANO ? [
   { key: 'bg-far', f: 0.05, A: 1040, row: 724, s: 0.55, bottom: '#1c0c0e', mirror: true },
   { key: 'bg-mid', f: 0.11, A: 1120, row: 620, s: 0.62, bottom: '#2a0806', mirror: true },
 ] : [
   { key: 'bg-far', f: 0.05, A: 1040, row: 724, s: 0.55, bottom: '#32396b', mirror: true },
   { key: 'bg-mid', f: 0.11, A: 1120, row: 620, s: 0.62, bottom: '#3c4b82', mirror: true },
 ];
-loadImage('bg-far', [VOLCANO ? 'assets/bg/volcano-far.png' : 'assets/bg/far-mountains.png'], 1);
-loadImage('bg-mid', [VOLCANO ? 'assets/bg/volcano-mid.png' : 'assets/bg/castle-lake.png'], 1);
+if (!ARENA) {
+  loadImage('bg-far', [VOLCANO ? 'assets/bg/volcano-far.png' : 'assets/bg/far-mountains.png'], 1);
+  loadImage('bg-mid', [VOLCANO ? 'assets/bg/volcano-mid.png' : 'assets/bg/castle-lake.png'], 1);
+}
 loadImage('wood-planks', ['assets/bg/wood-planks.png']);
-loadImage('rock', [VOLCANO ? 'assets/bg/basalt.png' : 'assets/bg/rock.png'], 1);
+if (!ARENA) loadImage('rock', [VOLCANO ? 'assets/bg/basalt.png' : 'assets/bg/rock.png'], 1);
 if (VOLCANO) loadImage('dead-tree', ['assets/props/dead-tree.png'], 1);
 for (const k of ['pine-large', 'pine-medium', 'pine-small', 'lamp', 'crate', 'rock-small', 'sandbags', 'barrel', 'fence', 'signpost', 'tent', 'watchtower', 'lantern-hang', 'pk-health', 'pk-ammo', 'pk-grenades', 'pk-vest', 'pk-fuel', 'pk-potion']) loadImage(k, [`assets/props/${k}.png`]);
 for (let i = 1; i <= 16; i++) loadImage('explode' + i, [`assets/fx/explode${i}.png`, `assets/original/fx/explode${i}.png`]);
@@ -728,12 +870,14 @@ function palette(hex) { return { main: hex, dark: mixHex(hex, '#000000', .45), d
 let tick = 0;
 function makeSoldier(name, col, x, y, isBot, id) {
   return { id, name, col, C: palette(col), isBot, x, y, tx: x, ty: y, vx: 0, vy: 0, hp: MAX_HEALTH, jet: START_JET, jetting: false, stance: 'stand', wantProne: false, onGround: false, aim: 0, facing: 1,
-    wi: 2, lastWi: 0, sec: 0, chargeT: 0, gravT: 0, freezeT: 0, chill: 0, burnT: 0, burnBy: null, flingT: 0, flingBy: null, pullT: 0, buff: '', buffT: 0, potions: 2, portalN: 0, portalCD: 0, dp: 0, flipLen: 24, rollT: -1, rollDir: 1, flipT: -1, jumpDir: 0, flipPending: false, lastKillT: -999, streak: 0, ammo: WEAPONS.map(w => w.mag), reloadT: 0, fireT: 0, startT: 0, flashT: 0, jumpT: -1, dead: false, respawnT: 0, protect: 60, anim: 0, kills: 0, deaths: 0,
+    wi: 2, lastWi: 0, sec: 0, team: 0, pitDeath: false, chargeT: 0, gravT: 0, freezeT: 0, chill: 0, burnT: 0, burnBy: null, flingT: 0, flingBy: null, pullT: 0, buff: '', buffT: 0, potions: 2, portalN: 0, portalCD: 0, dp: 0, flipLen: 24, rollT: -1, rollDir: 1, flipT: -1, jumpDir: 0, flipPending: false, lastKillT: -999, streak: 0, ammo: WEAPONS.map(w => w.mag), reloadT: 0, fireT: 0, startT: 0, flashT: 0, jumpT: -1, dead: false, respawnT: 0, protect: 60, anim: 0, kills: 0, deaths: 0,
     grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0, hasKnife: true, hasBoom: true, throwT: 0, armor: 0, flipCool: 0, reloadStart: 0, flipDir: 0, slideT: 0, prevFacing: 0,
     input: {}, ai: { timer: 0, strafe: 1, pref: 250, seen: 0, err: 0, errT: 0, jetting: false, crouch: false, nadeT: 0 } };
 }
-let player = makeSoldier('Você', COLORS[0], MAP.spawns[0], VOLCANO ? groundH(MAP.spawns[0]) - 3 : 980, false, 'h');
-const bot = makeSoldier('Bot', COLORS[1], MAP.spawns[1], groundH(MAP.spawns[1]) - 3, true, 'b');
+// ground maps list spawn columns (y from the terrain); arenas list [x, y] points above their platforms
+function spawnXY(i) { const sp = MAP.spawns[i % MAP.spawns.length]; return Array.isArray(sp) ? [sp[0], sp[1]] : [sp, groundH(sp) - 3]; }
+let player = makeSoldier('Você', COLORS[0], spawnXY(0)[0], ARENA ? spawnXY(0)[1] : VOLCANO ? groundH(MAP.spawns[0]) - 3 : 980, false, 'h');
+const bot = makeSoldier('Bot', COLORS[1], spawnXY(1)[0], spawnXY(1)[1], true, 'b');
 const soldiers = [player, bot];
 let netMode = 'solo'; // 'solo' (with bot) | 'host' | 'guest'
 const netEvents = [];
@@ -882,6 +1026,7 @@ function updateSoldier(e) {
   const airborne = !e.onGround, pv = Math.hypot(e.vx, e.vy);
   moveSoldier(e);
   if (e.flingT > 0) flingImpact(e, pv);
+  if (MAP.pit && e.y > MAP.pit) { e.protect = 0; e.buff = ''; e.pitDeath = true; hurt(e, 9999, e, MAP.pitName, e.x, MAP.pit - 4, 0, -1); return; }
   if (lavaAt(e.x, e.y - 2)) {
     // lava: thick (slows you down, pushes up a little) and burns fast; jetpack out
     e.vx *= 0.9; e.vy = Math.min(e.vy, 1.2) - 0.05;
@@ -1431,6 +1576,7 @@ function potionFx(e, kind) {
 
 function hurt(t, dmg, src, wname, hx, hy, dirx, diry, quiet) {
   if (t.dead || t.protect > 0 || t.buff === 'shield') return;
+  if (gameMode === 'ctf' && src && src !== t && src.team === t.team) return;
   if (src && src.buff === 'dmg') dmg *= 2;
   if (t.freezeT > 0) dmg *= 1.5;
   if (t.armor > 0) { const ab = Math.min(t.armor, dmg * 0.6); t.armor -= ab; dmg -= ab; }
@@ -1463,7 +1609,7 @@ function killFx(t, src, wname, hx, hy, dirx) {
   if (src === player && t !== player) {
     player.streak = tick - player.lastKillT < 180 ? player.streak + 1 : 1; player.lastKillT = tick;
     bigMsg = { text: player.streak === 2 ? 'DOUBLE KILL' : player.streak === 3 ? 'TRIPLE KILL' : player.streak > 3 ? 'MULTI KILL' : `Você matou ${t.name}`, t: 240 };
-  } else if (t === player) bigMsg = { text: src === t ? (wname === 'Gelo' ? 'Esmagado pelo gelo' : wname === 'Rocha' ? 'Esmagado por uma rocha' : wname === 'Lava' ? 'Derreteu na lava' : 'Você se explodiu') : `Morto por ${src ? src.name : '?'}`, t: 240 };
+  } else if (t === player) bigMsg = { text: src === t ? (wname === MAP.pitName ? 'Você caiu na água' : wname === 'Gelo' ? 'Esmagado pelo gelo' : wname === 'Rocha' ? 'Esmagado por uma rocha' : wname === 'Lava' ? 'Derreteu na lava' : 'Você se explodiu') : `Morto por ${src ? src.name : '?'}`, t: 240 };
 }
 
 // Verlet ragdoll: 11 points joined by sticks, colliding with the terrain mask (Soldat corpses are skeletons too)
@@ -1511,7 +1657,8 @@ function respawn(e) {
   e.ammo = WEAPONS.map(w => w.mag); e.grenades = 3; e.stance = 'stand'; e.wantProne = false; e.hasKnife = true; e.hasBoom = true; e.throwT = 0; e.armor = 0;
   e.freezeT = 0; e.chill = 0; e.burnT = 0; e.buff = ''; e.buffT = 0; e.chargeT = 0; e.gravT = 0; e.flingT = 0; e.pullT = 0; e.potions = 2; e.flipLen = 24;
   if (e.isBot) e.wi = BOT_WEAPONS[Math.random() * BOT_WEAPONS.length | 0];
-  if (lavaAt(e.x, e.y) || lavaAt(e.x, e.y - 4)) { e.x = MAP.spawns[Math.random() * MAP.spawns.length | 0]; e.y = groundH(e.x) - 3; }
+  if (gameMode === 'ctf' && flags.length) { ctfPlace(e); e.pitDeath = false; }
+  else if (e.pitDeath || lavaAt(e.x, e.y) || lavaAt(e.x, e.y - 4)) { const sp = spawnXY(Math.random() * MAP.spawns.length | 0); e.x = sp[0]; e.y = sp[1]; e.pitDeath = false; e.vx = e.vy = 0; }
   unstick(e);
 }
 
@@ -1649,16 +1796,16 @@ function botThink(e) {
   if (--ai.timer <= 0) { ai.timer = 40 + Math.random() * 90; ai.strafe = Math.random() < .5 ? -1 : 1; ai.pref = 160 + Math.random() * 220; ai.crouch = Math.random() < .3; }
   let dir;
   if (dist > ai.pref + 70) dir = Math.sign(dx); else if (dist < ai.pref - 90) dir = -Math.sign(dx); else dir = ai.strafe;
-  const goDove = gameMode === 'dove' && dove.over <= 0 && !dove.carrier;
-  if (goDove) dir = Math.sign(dove.x - e.x) || dir;
+  const obj = botObjective(e);
+  if (obj && Math.abs(obj.x - e.x) > 8) dir = Math.sign(obj.x - e.x);
   const lavaX = e.x + dir * 45, lavaP = dir && e.onGround ? lavaAhead(lavaX) : null;
   if (lavaP && groundBelow(lavaX | 0, e.y - 20) >= lavaP.y) { if (e.jet > 120) { ai.jetting = true; inp.jumpPressed = true; } else dir = -dir; }
   inp.left = dir < 0; inp.right = dir > 0;
   const wall = dir !== 0 && collides(e.x + dir * 12, e.y - 7, 10, h - 7);
   if (wall && e.onGround) inp.jumpPressed = true;
   if ((dy < -60 || wall) && e.jet > 40) ai.jetting = true;
-  if (goDove && dove.y < e.y - 70 && e.jet > 40) ai.jetting = true;
-  if (e.jet < 8 || (dy > 10 && !wall && !(goDove && dove.y < e.y - 70))) ai.jetting = false;
+  if (obj && obj.y < e.y - 70 && e.jet > 40) ai.jetting = true;
+  if (e.jet < 8 || (dy > 10 && !wall && !(obj && obj.y < e.y - 70))) ai.jetting = false;
   if (!e.onGround && e.vy > 3.5 && e.jet > 20) ai.jetting = true;
   if (lavaAt(e.x, e.y - 2) && e.jet > 0) ai.jetting = true;
   inp.jet = ai.jetting;
@@ -1741,6 +1888,7 @@ function buildLivingWorld() {
     if (mask[i] === ROCK && !mask[i + W] && openBelow(x, y, 90)) cands.push([x, y + 1]);
   }
   for (let i = cands.length - 1; i > 0; i--) { const j = rng() * (i + 1) | 0; [cands[i], cands[j]] = [cands[j], cands[i]]; }
+  if (ARENA) cands.length = 0; // no icicles on the arenas
   for (const [x, y] of cands) {
     if (ICICLES.length >= 22) break;
     if (ICICLES.some(c => Math.hypot(c.x - x, c.y - y) < 70)) continue;
@@ -2047,6 +2195,72 @@ function doveFx() {
   particles.push({ t: 'vort', cx: dove.x, cy: dove.y, a: rnd(0, 6.28), r: rnd(3, 9), w: .35, life: 16, max: 16, col: '255,215,90' });
 }
 
+// ================= Capture the flag =================
+// Blue flag on the left, red flag on the right. Grab the enemy flag, carry it back and touch your own flag (which must be at home) to score.
+// Dying drops the flag where you fell: teammates touching it send it home, enemies pick it up. First team to CTF.target captures wins.
+const CTF = { target: 3, score: [0, 0], over: 0, winner: -1 };
+const flags = [];
+const TEAM_COLORS = ['#2f6bff', '#e0393b'], TEAM_NAMES = ['AZUL', 'VERMELHO'];
+function setTeam(e, t) { e.team = t; if (gameMode === 'ctf') { e.col = TEAM_COLORS[t]; e.C = palette(e.col); } }
+function balancedTeam() { const n = [0, 0]; for (const q of soldiers) n[q.team || 0]++; return n[0] <= n[1] ? 0 : 1; }
+function initFlags() {
+  flags.length = 0;
+  MAP.flags.forEach(([fx, fy], t) => { const gy = groundBelow(fx | 0, fy | 0); flags.push({ x: fx, y: gy, vy: 0, home: { x: fx, y: gy }, carrier: null, dropT: 0, atHome: true }); });
+}
+function ctfPlace(e) { const h = flags[e.team || 0].home, x = h.x + rnd(-40, 40); e.x = x; e.y = groundBelow(x | 0, h.y - 70) - 3; e.vx = e.vy = 0; e.tx = e.x; e.ty = e.y; }
+function resetCtf() {
+  initFlags(); CTF.score = [0, 0]; CTF.over = 0; CTF.winner = -1;
+  for (const q of soldiers) { if (q.isBot || netMode === 'solo' && q !== player) setTeam(q, 1); else if (q === player) setTeam(q, 0); else setTeam(q, balancedTeam()); }
+  for (const q of soldiers) { ctfPlace(q); q.hp = MAX_HEALTH; q.dead = false; }
+}
+function returnFlag(f) { f.x = f.home.x; f.y = f.home.y; f.vy = 0; f.carrier = null; f.atHome = true; f.dropT = 0; }
+function dropFlag(f, x, y) { f.carrier = null; f.atHome = false; f.dropT = 900; if (x != null) { f.x = x; f.y = y; } f.vy = -2; }
+function updateCtf() {
+  if (gameMode !== 'ctf') return;
+  if (!flags.length || flags[0].home.y >= H - 2) initFlags();
+  if (CTF.over > 0) { if (--CTF.over === 0) resetCtf(); return; }
+  flags.forEach((f, t) => {
+    if (f.carrier) {
+      const c = f.carrier;
+      if (c.dead || !soldiers.includes(c)) { dropFlag(f, c.x, c.y - 10); announce(`A bandeira ${TEAM_NAMES[t]} caiu!`); }
+      else { f.x = c.x; f.y = c.y; return; }
+    }
+    if (!f.atHome) {
+      f.vy = Math.min(f.vy + GRAV * 1.4, 5);
+      if (solid(f.x, f.y + f.vy + 1)) f.vy = f.vy > 1.2 ? -f.vy * .3 : 0; else f.y += f.vy;
+      if (solid(f.x, f.y)) f.y--;
+      if (lavaAt(f.x, f.y) || (MAP.pit && f.y > MAP.pit - 20) || f.y > H - 30) { returnFlag(f); announce(`A bandeira ${TEAM_NAMES[t]} voltou para a base`); return; }
+      if (--f.dropT <= 0) { returnFlag(f); announce(`A bandeira ${TEAM_NAMES[t]} voltou para a base`); return; }
+    }
+    for (const q of soldiers) {
+      if (q.dead) continue;
+      const [, h] = dims(q);
+      if (Math.abs(q.x - f.x) > 13 || f.y - 14 > q.y + 4 || f.y < q.y - h - 4) continue;
+      if (q.team === t) { if (!f.atHome) { returnFlag(f); announce(`${q.name} devolveu a bandeira ${TEAM_NAMES[t]}`); } }
+      else { f.carrier = q; f.atHome = false; announce(`${q.name} pegou a bandeira ${TEAM_NAMES[t]}!`); break; }
+    }
+  });
+  flags.forEach((f, t) => {
+    const c = f.carrier; if (!c) return;
+    const own = flags[c.team];
+    if (own.atHome && Math.abs(c.x - own.home.x) < 18 && Math.abs(c.y - own.home.y) < 30) {
+      CTF.score[c.team]++; returnFlag(f);
+      if (CTF.score[c.team] >= CTF.target) { CTF.over = 480; CTF.winner = c.team; announce(`TIME ${TEAM_NAMES[c.team]} VENCEU!`); }
+      else announce(`${c.name} capturou! ${CTF.score[0]} x ${CTF.score[1]}`);
+    }
+  });
+}
+function botObjective(e) {
+  if (gameMode === 'dove' && dove.over <= 0 && !dove.carrier) return dove;
+  if (gameMode === 'ctf' && CTF.over <= 0 && flags.length) {
+    const own = flags[e.team], foe = flags[1 - e.team];
+    if (foe.carrier === e) return own.atHome ? own.home : own;
+    if (!own.atHome && !own.carrier) return own;
+    return foe.carrier && foe.carrier.team === e.team ? own.home : foe;
+  }
+  return null;
+}
+
 // ================= Loop =================
 function step() {
   tick++;
@@ -2060,7 +2274,7 @@ function step() {
     s.acc = {};
   }
   for (const s of soldiers) { updateSoldier(s); groundFx(s); }
-  updateBullets(); updateMolotovs(); updateHoles(); updatePortals(); updateFires(); updateKnives(); updateBoomerangs(); updateLivingWorld(); updateDove(); updateParticles();
+  updateBullets(); updateMolotovs(); updateHoles(); updatePortals(); updateFires(); updateKnives(); updateBoomerangs(); updateLivingWorld(); updateDove(); updateCtf(); updateParticles();
   frameTail();
   if (netMode === 'host' && tick % 2 === 0) hostSend();
 }
@@ -2094,17 +2308,18 @@ function updateSnow() {
 function drawBackground() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   const sky = ctx.createLinearGradient(0, 0, 0, SH);
-  if (VOLCANO) { sky.addColorStop(0, '#0c0507'); sky.addColorStop(.35, '#2a0b0e'); sky.addColorStop(.62, '#6a1d12'); sky.addColorStop(.82, '#c4471a'); sky.addColorStop(1, '#ff8a32'); }
+  if (ARENA) { sky.addColorStop(0, THEME.sky[0]); sky.addColorStop(.55, THEME.sky[1]); sky.addColorStop(1, THEME.sky[2]); }
+  else if (VOLCANO) { sky.addColorStop(0, '#0c0507'); sky.addColorStop(.35, '#2a0b0e'); sky.addColorStop(.62, '#6a1d12'); sky.addColorStop(.82, '#c4471a'); sky.addColorStop(1, '#ff8a32'); }
   else { sky.addColorStop(0, '#16224a'); sky.addColorStop(.35, '#3c4682'); sky.addColorStop(.62, '#a58aae'); sky.addColorStop(.8, '#f5b27e'); sky.addColorStop(1, '#ffd9a0'); }
   ctx.fillStyle = sky; ctx.fillRect(0, 0, SW, SH);
   // sun
-  const sunX = SW / 2 + (2350 - cam.x) * 0.04 * Z, sunY = SH / 2 + (1010 - cam.y) * 0.1 * Z;
+  const SUNP = ARENA ? [W * .7, H * .3] : [2350, 1010], sunX = SW / 2 + (SUNP[0] - cam.x) * 0.04 * Z, sunY = SH / 2 + (SUNP[1] - cam.y) * 0.1 * Z;
   let g = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 260 * Z / 3);
   if (VOLCANO) { g.addColorStop(0, 'rgba(255,170,90,.55)'); g.addColorStop(.3, 'rgba(255,100,40,.25)'); g.addColorStop(1, 'rgba(255,80,30,0)'); }
   else { g.addColorStop(0, 'rgba(255,240,200,1)'); g.addColorStop(.08, 'rgba(255,225,170,.95)'); g.addColorStop(.3, 'rgba(255,180,120,.35)'); g.addColorStop(1, 'rgba(255,160,120,0)'); }
   ctx.fillStyle = g; ctx.fillRect(0, 0, SW, SH);
-  if (!VOLCANO) drawAurora();
-  const layers = PAINTED.every(L => ready(IMG[L.key])) ? [BG[0], ...PAINTED] : BG;
+  if (!VOLCANO && !ARENA) drawAurora();
+  const layers = PAINTED.length && PAINTED.every(L => ready(IMG[L.key])) ? [BG[0], ...PAINTED] : BG;
   for (const L of layers) {
     const img = L.img || IMG[L.key], sc = L.s || 1;
     const tw = (img.naturalWidth || img.width) * sc * Z, th = (img.naturalHeight || img.height) * sc * Z;
@@ -2116,7 +2331,7 @@ function drawBackground() {
       else ctx.drawImage(img, x, y, tw + 1, th);
     }
     if (L.bottom && y + th < SH) { ctx.fillStyle = L.bottom; ctx.fillRect(0, y + th - 1, SW, SH - y - th + 1); }
-    if (L.key === 'bg-mid' && !VOLCANO) drawFog(y + L.row * sc * Z);
+    if (L.key === 'bg-mid' && !VOLCANO && !ARENA) drawFog(y + L.row * sc * Z);
     if (L.lake) {
       const wl = y + L.row * Z;
       ctx.globalCompositeOperation = 'lighter';
@@ -2150,8 +2365,10 @@ function drawWorld() {
   for (const s of soldiers) if (s.dead) drawSoldier(s);
   for (const s of soldiers) if (!s.dead) drawSoldier(s);
   drawDove();
+  drawCtf();
   drawHoles();
   drawLava();
+  drawPitAndFalls();
   const gi = IMG['frag-grenade'];
   for (const g of grenades) {
     if (ready(gi)) { const gw = gi.naturalWidth * PX, gh = gi.naturalHeight * PX; ctx.save(); ctx.translate(g.x, g.y - gh / 2); ctx.rotate(g.r); ctx.drawImage(gi, -gw / 2, -gh / 2, gw, gh); ctx.restore(); }
@@ -2220,6 +2437,33 @@ function drawWorld() {
   }
 }
 
+function drawPitAndFalls() {
+  const t = performance.now() / 1000;
+  if (MAP.pit) {
+    // water under the ruins: deadly below the line; it only has to look deep and cold
+    const y0 = MAP.pit - 18, g = ctx.createLinearGradient(0, y0, 0, H);
+    g.addColorStop(0, 'rgba(120,200,230,.88)'); g.addColorStop(.25, 'rgba(40,120,180,.94)'); g.addColorStop(1, 'rgba(8,40,90,.98)');
+    ctx.fillStyle = g; ctx.fillRect(0, y0, W, H - y0);
+    ctx.strokeStyle = 'rgba(235,250,255,.85)'; ctx.lineWidth = 1.6; ctx.beginPath();
+    for (let x = 0; x <= W; x += 6) { const y = y0 + Math.sin(x * .05 + t * 2) * 1.4 + Math.sin(x * .13 - t * 3) * .7; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(200,235,255,.14)';
+    for (let i = 0; i < 40; i++) ctx.fillRect(((i * 197 + t * 9 * (1 + i % 3)) % W), y0 + 6 + (i * 37) % 90, 30 + (i * 13) % 50, 1.2);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  const F = MAP.waterfall;
+  if (F) {
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 26; i++) {
+      const x = F.x - F.w / 2 + ((i * 7.3) % F.w), len = 40 + (i * 29) % 90, y = F.y0 + ((i * 53 + t * (150 + (i % 5) * 30)) % (F.y1 - F.y0 + len)) - len;
+      const yy = Math.max(F.y0, y), ll = Math.min(F.y1, y + len) - yy; if (ll <= 0) continue;
+      ctx.fillStyle = `rgba(220,245,255,${.16 + (i % 4) * .04})`; ctx.fillRect(x, yy, 2 + i % 3, ll);
+    }
+    const mg = ctx.createRadialGradient(F.x, F.y1, 4, F.x, F.y1, 70); mg.addColorStop(0, 'rgba(230,250,255,.5)'); mg.addColorStop(1, 'rgba(230,250,255,0)');
+    ctx.fillStyle = mg; ctx.fillRect(F.x - 70, F.y1 - 70, 140, 100);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+}
 function drawPortals() {
   for (const p of portals) {
     const active = !!portalPair(p), col = p.idx ? '255,150,50' : '70,160,255', pulse = .85 + .15 * Math.sin(tick * .2 + p.idx * 2);
@@ -2420,13 +2664,13 @@ function drawPost() {
     }
     ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(120,112,110,.8)';
     for (const [i, f] of flakes.entries()) if (i % 3 === 0) { ctx.globalAlpha = .4; ctx.fillRect(f.x * SW, (1 - f.y) * SH, f.s * Z / 3, f.s * Z / 3); }
-  } else {
+  } else if (!ARENA) {
     ctx.fillStyle = 'rgba(245,248,255,.75)';
     for (const f of flakes) { ctx.globalAlpha = .35 + f.s * .25; ctx.beginPath(); ctx.arc(f.x * SW, f.y * SH, f.s * Z / 3, 0, 7); ctx.fill(); }
   }
   ctx.globalAlpha = 1;
   const v = ctx.createRadialGradient(SW / 2, SH / 2, SH * .35, SW / 2, SH / 2, SH * .95);
-  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, VOLCANO ? 'rgba(25,4,2,.6)' : 'rgba(5,8,25,.55)');
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, VOLCANO ? 'rgba(25,4,2,.6)' : ARENA ? THEME.vig : 'rgba(5,8,25,.55)');
   ctx.fillStyle = v; ctx.fillRect(0, 0, SW, SH);
 }
 
@@ -2492,7 +2736,57 @@ function drawMinimap() {
   ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.strokeRect(x0 + (cam.x - SW / 2 / Z) * sx, y0 + (cam.y - SH / 2 / Z) * sy, SW / Z * sx, SH / Z * sy);
   for (const q of pickups) { ctx.fillStyle = '#f2d23a'; ctx.fillRect(x0 + q.x * sx - 1.5, y0 + q.y * sy - 3, 3, 3); }
   if (gameMode === 'dove') { ctx.fillStyle = '#ffd75a'; ctx.beginPath(); ctx.arc(x0 + dove.x * sx, y0 + dove.y * sy, 4.5, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.stroke(); }
+  if (gameMode === 'ctf') for (const [t, f] of flags.entries()) { ctx.fillStyle = TEAM_COLORS[t]; ctx.fillRect(x0 + f.x * sx - 3, y0 + (f.y - 20) * sy - 3, 6, 6); ctx.strokeStyle = '#fff'; ctx.strokeRect(x0 + f.x * sx - 3, y0 + (f.y - 20) * sy - 3, 6, 6); }
   for (const q of soldiers) { if (q.dead) continue; ctx.fillStyle = q.col; ctx.beginPath(); ctx.arc(x0 + q.x * sx, y0 + (q.y - 12) * sy, q === player ? 4 : 3, 0, 7); ctx.fill(); if (q === player) { ctx.strokeStyle = '#fff'; ctx.stroke(); } }
+}
+function drawFlagShape(x, y, team, carried, face) {
+  const col = TEAM_COLORS[team], dir = carried ? -face : 1, wob = Math.sin(tick * .22 + team * 2);
+  ctx.save(); ctx.translate(x + (carried ? -6 * face : 0), y);
+  ctx.strokeStyle = '#2a2420'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -34); ctx.stroke();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -34);
+  ctx.quadraticCurveTo(dir * 8, -34 + wob * 2.4, dir * 17, -31 + wob * 1.6); ctx.quadraticCurveTo(dir * 11, -27 + wob * 1.2, dir * 17, -21 + wob * 2); ctx.quadraticCurveTo(dir * 8, -22 + wob * 2.6, 0, -21);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(dir > 0 ? 1 : -3, -33, 2, 12);
+  ctx.restore();
+}
+function drawCtf() {
+  if (gameMode !== 'ctf') return;
+  flags.forEach((f, t) => {
+    const col = TEAM_COLORS[t];
+    // base marker: glowing pad that stays at home even when the flag is away
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(f.home.x, f.home.y - 2, 2, f.home.x, f.home.y - 2, 30); g.addColorStop(0, col + 'aa'); g.addColorStop(1, col + '00');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(f.home.x, f.home.y - 2, 30, 10, 0, 0, 7); ctx.fill(); ctx.restore();
+    ctx.fillStyle = col; ctx.fillRect(f.home.x - 14, f.home.y - 1, 28, 2);
+    if (!f.atHome || f.carrier) { ctx.globalAlpha = .35; ctx.strokeStyle = '#2a2420'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(f.home.x, f.home.y); ctx.lineTo(f.home.x, f.home.y - 34); ctx.stroke(); ctx.globalAlpha = 1; }
+    const c = f.carrier;
+    drawFlagShape(f.x, f.y - (c ? 6 : 0), t, !!c, c ? c.facing : 1);
+    if (!f.atHome && !c) { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(f.x - 5, f.y - 46 + Math.sin(tick * .15) * 1.5); ctx.lineTo(f.x + 5, f.y - 46 + Math.sin(tick * .15) * 1.5); ctx.lineTo(f.x, f.y - 40 + Math.sin(tick * .15) * 1.5); ctx.fill(); }
+  });
+}
+function edgeArrow(wx, wy, color) {
+  const sx = SW / 2 + (wx - cam.x) * Z, sy = SH / 2 + (wy - cam.y) * Z, m = 44;
+  if (sx >= m && sx <= SW - m && sy >= m && sy <= SH - m) return;
+  const dx = sx - SW / 2, dy = sy - SH / 2, k = Math.min((SW / 2 - m) / (Math.abs(dx) || 1e-6), (SH / 2 - m) / (Math.abs(dy) || 1e-6));
+  ctx.save(); ctx.translate(SW / 2 + dx * k, SH / 2 + dy * k); ctx.rotate(Math.atan2(dy, dx));
+  ctx.shadowColor = color; ctx.shadowBlur = 14; ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-10, -11); ctx.lineTo(-3, 0); ctx.lineTo(-10, 11); ctx.fill(); ctx.restore();
+}
+function drawCtfHud() {
+  if (gameMode !== 'ctf' || !flags.length) return;
+  const X = v => v * SW / 1920, Y = v => v * SH / 1080, F = (px, wgt = 700) => `${wgt} ${Math.round(px * SH / 1080)}px Rajdhani, sans-serif`;
+  ctx.fillStyle = 'rgba(8,12,26,.62)'; ctx.fillRect(X(700), Y(12), X(520), Y(74));
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+  ctx.font = F(17, 600); ctx.fillStyle = '#aab4d6'; ctx.fillText(`CAPTURE A BANDEIRA  -  primeiro a ${CTF.target} vence`, X(960), Y(27));
+  ctx.font = F(24); ctx.textAlign = 'left'; ctx.fillStyle = TEAM_COLORS[0]; ctx.fillText('AZUL', X(730), Y(60));
+  ctx.textAlign = 'right'; ctx.fillStyle = TEAM_COLORS[1]; ctx.fillText('VERMELHO', X(1190), Y(60));
+  ctx.textAlign = 'center'; ctx.font = F(44); ctx.fillStyle = TEAM_COLORS[0]; ctx.fillText(String(CTF.score[0]), X(900), Y(58));
+  ctx.fillStyle = TEAM_COLORS[1]; ctx.fillText(String(CTF.score[1]), X(1020), Y(58));
+  ctx.fillStyle = '#e8ecf8'; ctx.font = F(30); ctx.fillText(':', X(960), Y(56));
+  const me = player, foe = flags[1 - me.team], own = flags[me.team];
+  if (foe && foe.carrier === me) { ctx.font = F(30); ctx.fillStyle = '#ffd75a'; ctx.fillText(own.atHome ? 'VOLTE À SUA BASE!' : 'SUA BANDEIRA FOI ROUBADA - recupere-a!', SW / 2, Y(120)); }
+  ctx.textBaseline = 'alphabetic';
+  flags.forEach((f, t) => { if (f.carrier !== me) edgeArrow(f.x, f.y - 20, TEAM_COLORS[t]); });
 }
 function drawDoveHud() {
   if (gameMode !== 'dove') return;
@@ -2508,14 +2802,7 @@ function drawDoveHud() {
     ctx.textAlign = 'right'; ctx.fillStyle = car ? '#ffd75a' : '#e8ecf8'; ctx.fillText(String(q.dp), X(x0 + w - 14), Y(y));
   });
   ctx.textBaseline = 'alphabetic';
-  // arrow at the screen edge pointing to the dove when it is off screen
-  const sx = SW / 2 + (dove.x - cam.x) * Z, sy = SH / 2 + (dove.y - cam.y) * Z, m = 44;
-  if (dove.carrier !== player && (sx < m || sx > SW - m || sy < m || sy > SH - m)) {
-    const dx = sx - SW / 2, dy = sy - SH / 2, k = Math.min((SW / 2 - m) / (Math.abs(dx) || 1e-6), (SH / 2 - m) / (Math.abs(dy) || 1e-6));
-    ctx.save(); ctx.translate(SW / 2 + dx * k, SH / 2 + dy * k); ctx.rotate(Math.atan2(dy, dx));
-    ctx.shadowColor = 'rgba(255,215,90,.9)'; ctx.shadowBlur = 14; ctx.fillStyle = '#ffd75a';
-    ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-10, -11); ctx.lineTo(-3, 0); ctx.lineTo(-10, 11); ctx.fill(); ctx.restore();
-  }
+  if (dove.carrier !== player) edgeArrow(dove.x, dove.y, '#ffd75a');
 }
 function drawHUD() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -2548,7 +2835,7 @@ function drawHUD() {
   ctx.textAlign = 'left'; ctx.font = F(22); ctx.fillStyle = '#9dff8a'; ctx.fillText(`x${p.potions}  (V)`, X(1326), Y(1024));
   if (p.buff) { const P = POTIONS.find(q => q[0] === p.buff) || POTIONS[0]; ctx.font = F(22); ctx.fillStyle = `rgb(${P[2]})`; ctx.fillText(P[1], X(1290), Y(978)); hudBar(1290, 1420, 988, 7, p.buffT / 600, `rgb(${P[2]})`); }
   if (p.chill > 5 || p.freezeT > 0) { ctx.font = F(24); ctx.fillStyle = '#9fe3ff'; ctx.textAlign = 'center'; ctx.fillText(p.freezeT > 0 ? 'CONGELADO' : 'ESFRIANDO...', SW / 2, Y(880)); }
-  drawWeaponMenu(); drawScores(); drawMinimap(); drawDoveHud();
+  drawWeaponMenu(); drawScores(); drawMinimap(); drawDoveHud(); drawCtfHud();
   // jet: icon + cyan bar (bottom right)
   ctx.fillStyle = '#3ad0e0'; ctx.beginPath(); ctx.moveTo(X(1440), Y(1043)); ctx.lineTo(X(1452), Y(1013)); ctx.lineTo(X(1464), Y(1043)); ctx.fill();
   hudBar(1532, 1787, 1025, 16, p.jet / START_JET, '#2fc6e0');
@@ -2612,7 +2899,7 @@ function applyPlanks() {
 }
 function render() {
   if (!worldCanvas) { drawBackground(); return; }
-  if (!planksApplied && worldCanvas && ready(IMG['wood-planks'])) applyPlanks();
+  if (!planksApplied && worldCanvas && MAP.planks && ready(IMG['wood-planks'])) applyPlanks();
   if (!rockApplied && ROCK_LAYERS && ready(IMG.rock)) applyRock();
   drawBackground();
   drawWorld();
@@ -2675,16 +2962,27 @@ document.querySelectorAll('#maps button').forEach(b => {
 });
 if (roomCode) { $('map-pick').hidden = true; $('mode-pick').hidden = true; }
 let selMode = 'dm';
-try { selMode = localStorage.getItem('sr-mode') === 'dove' ? 'dove' : 'dm'; } catch (err) { /* storage blocked: default */ }
+try { const m = localStorage.getItem('sr-mode'); selMode = m === 'dove' || m === 'ctf' ? m : 'dm'; $('ctf-target').value = localStorage.getItem('sr-ctf') || '3'; } catch (err) { /* storage blocked: default */ }
+const showCtfOpts = () => { $('ctf-opts').hidden = selMode !== 'ctf'; };
 document.querySelectorAll('#modes button').forEach(b => {
   b.classList.toggle('on', b.dataset.mode === selMode);
   b.onclick = () => {
     selMode = b.dataset.mode;
     try { localStorage.setItem('sr-mode', selMode); } catch (err) { /* ignore */ }
     document.querySelectorAll('#modes button').forEach(q => q.classList.toggle('on', q === b));
+    showCtfOpts();
   };
 });
-function applyMode() { gameMode = selMode; if (gameMode === 'dove') resetDove(); }
+showCtfOpts();
+function applyMode() {
+  gameMode = selMode;
+  if (gameMode === 'dove') resetDove();
+  if (gameMode === 'ctf') {
+    CTF.target = clamp(parseInt($('ctf-target').value, 10) || 3, 1, 10);
+    try { localStorage.setItem('sr-ctf', String(CTF.target)); } catch (err) { /* ignore */ }
+    resetCtf();
+  }
+}
 $('play').onclick = () => { saveProfile(); applyMode(); startGame(); };
 addEventListener('keydown', e => { if (e.code === 'Escape' && netMode === 'solo') { running = false; $('overlay').style.display = 'flex'; } });
 
@@ -2707,7 +3005,7 @@ $('host').onclick = () => {
     netMode = 'host';
     const bi = soldiers.indexOf(bot); if (bi >= 0) soldiers.splice(bi, 1);
     const link = `${location.origin}${location.pathname}?sala=${roomId}&mapa=${MAP_ID}`;
-    $('map-pick').hidden = true; $('mode-pick').hidden = true;
+    $('map-pick').hidden = true; $('mode-pick').hidden = true; $('ctf-opts').hidden = true;
     roomStatus(`Sala <b>${roomId}</b> criada. Mande este link para quem vai jogar com você:<code>${link}</code><button id="copy" class="alt">COPIAR LINK</button><button id="go">ENTRAR NO JOGO</button>`);
     $('copy').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => { $('copy').textContent = 'LINK COPIADO'; }); };
     $('go').onclick = startGame;
@@ -2726,8 +3024,9 @@ function onHostData(conn, m) {
   if (!m || typeof m !== 'object') return;
   if (m.t === 'hello' && !conn.soldier) {
     const name = String(m.name || 'Amigo').slice(0, 12), col = COLORS.includes(m.col) ? m.col : COLORS[2];
-    const gx = MAP.spawns[(1 + guestN) % MAP.spawns.length], g = makeSoldier(name, col, gx, groundH(gx) - 3, false, 'g' + (++guestN));
+    const gsp = spawnXY(1 + guestN), g = makeSoldier(name, col, gsp[0], gsp[1], false, 'g' + (++guestN));
     g.remote = true; unstick(g); soldiers.push(g); conn.soldier = g; conns.push(conn);
+    if (gameMode === 'ctf') { setTeam(g, balancedTeam()); ctfPlace(g); }
     conn.send({ t: 'welcome', id: g.id });
     bigMsg = { text: `${name} entrou`, t: 180 }; emit({ t: 'msg', text: `${name} entrou` });
   } else if (m.t === 'in' && conn.soldier) {
@@ -2750,7 +3049,7 @@ function packSoldier(e) {
     flipT: e.flipT, jumpDir: e.jumpDir, jumpT: e.jumpT, onGround: e.onGround, jetting: e.jetting, anim: r2(e.anim), protect: e.protect,
     kills: e.kills, deaths: e.deaths, grenades: e.grenades, gCharge: e.gCharge, startT: e.startT,
     hasKnife: e.hasKnife, hasBoom: e.hasBoom, throwT: e.throwT, armor: r2(e.armor), reloadStart: e.reloadStart, flipDir: e.flipDir,
-    sec: e.sec, chargeT: e.chargeT, gravT: e.gravT, freezeT: e.freezeT, chill: Math.round(e.chill), burnT: e.burnT, buff: e.buff, buffT: e.buffT, potions: e.potions, dp: e.dp, flipLen: e.flipLen,
+    team: e.team, sec: e.sec, chargeT: e.chargeT, gravT: e.gravT, freezeT: e.freezeT, chill: Math.round(e.chill), burnT: e.burnT, buff: e.buff, buffT: e.buffT, potions: e.potions, dp: e.dp, flipLen: e.flipLen,
     rag: e.dead && e.rag ? e.rag.flatMap(q => [r2(q.x), r2(q.y)]) : null };
 }
 function hostSend() {
@@ -2768,6 +3067,7 @@ function hostSend() {
     mo: molotovs.map(m => [r2(m.x), r2(m.y), r2(m.r)]),
     po: portals.map(q => [r2(q.x), r2(q.y), r2(q.nx), r2(q.ny), q.owner.id, q.idx]),
     gm: gameMode, dv: [r2(dove.x), r2(dove.y), dove.carrier ? dove.carrier.id : '', dove.over],
+    fl: flags.map(f => [r2(f.x), r2(f.y), f.carrier ? f.carrier.id : '', f.atHome ? 1 : 0]), cs: CTF.score, ct: CTF.target, co: CTF.over,
     ev: netEvents.splice(0) };
   for (const c of conns) if (c.open) c.send(msg);
 }
@@ -2805,6 +3105,11 @@ function applySnapshot(m) {
   const me = soldiers.find(q => q.id === myId); if (me) player = me;
   if (m.gm) gameMode = m.gm;
   if (m.dv) { dove.x = m.dv[0]; dove.y = m.dv[1]; dove.carrier = m.dv[2] ? soldiers.find(q => q.id === m.dv[2]) || null : null; dove.over = m.dv[3]; }
+  if (gameMode === 'ctf') {
+    if (!flags.length || flags[0].home.y >= H - 2) initFlags();
+    (m.fl || []).forEach((q, i) => { const f = flags[i]; if (!f) return; f.x = q[0]; f.y = q[1]; f.carrier = q[2] ? soldiers.find(z => z.id === q[2]) || null : null; f.atHome = !!q[3]; });
+    CTF.score = m.cs || [0, 0]; CTF.target = m.ct || 3; CTF.over = m.co || 0;
+  }
   holes.length = 0; for (const q of m.hl || []) holes.push({ x: q[0], y: q[1], life: q[2] });
   fires.length = 0; for (const q of m.fz || []) fires.push({ x: q[0], y: q[1], w: q[2], life: q[3] });
   molotovs.length = 0; for (const q of m.mo || []) molotovs.push({ x: q[0], y: q[1], r: q[2], vx: 0, vy: 0 });
