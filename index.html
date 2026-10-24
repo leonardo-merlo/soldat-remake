@@ -1270,7 +1270,9 @@ function shoot(e, w) {
   inacc = Math.min(inacc * 0.25, MAX_INACCURACY);
   const dev = MAX_INACCURACY * Math.sin(inacc / MAX_INACCURACY * Math.PI / 2);
   let bx = c + (Math.random() * 2 - 1) * dev, by = sn + (Math.random() * 2 - 1) * dev;
-  const bl = Math.hypot(bx, by); const own = w.straight && w.kind !== 'cryo' ? 0 : 0.5; bx = bx / bl * w.speed + e.vx * own; by = by / bl * w.speed + e.vy * own;
+  const bl = Math.hypot(bx, by); const own = w.straight && w.kind !== 'cryo' ? 0 : 0.5; 
+  // the shooter's own speed only adds to the muzzle speed along the shot: adding it sideways (e.g. jetpack climbing) bent shots aimed slightly downwards upwards
+  const ux = bx / bl, uy = by / bl, boost = Math.max(-w.speed * .3, (e.vx * ux + e.vy * uy) * own); bx = ux * (w.speed + boost); by = uy * (w.speed + boost);
   // portal and black hole shots stop where the cursor was (even in mid-air), unless a wall gets in the way first
   const aimD = Math.max(reach + 6, Math.min(Math.hypot(e.input.aimX - s.x, e.input.aimY - s.y), w.kind === 'portal' ? 1100 : 650)), ttx = s.x + c * aimD, tty = s.y + sn * aimD;
   const add = (x, y, vx, vy) => bullets.push({ x, y, sx: x, sy: y, vx, vy, owner: e, w, life: w.life || 420, pcd: 0, tx: ttx, ty: tty });
