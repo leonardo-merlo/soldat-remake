@@ -175,8 +175,8 @@ const MAP = MAP_ID === 'selva' ? {
   lanterns: [], planks: null, lava: [], pit: 0,
   flags: [[255, 400], [1645, 400]], waterfall: { x: 950, y0: 345, y1: 925, w: 44 },
 } : MAP_ID === 'ruinas' ? {
-  spawns: [[330, 500], [2270, 500], [690, 860], [1910, 860], [1300, 410]],
-  crates: [[400, 480], [2200, 480], [1300, 400], [700, 840], [1900, 840], [1300, 770], [700, 260], [1900, 260]],
+  spawns: [[330, 500], [2270, 500], [690, 860], [1910, 860], [1300, 420]],
+  crates: [[400, 480], [2200, 480], [1300, 420], [700, 840], [1900, 840], [1300, 760], [700, 260], [1900, 260]],
   lanterns: [], planks: null, lava: [], pit: 1030, pitName: 'Água',
   flags: [[330, 500], [2270, 500]],
 } : VOLCANO ? {
@@ -207,14 +207,14 @@ if (MAP_ID === 'selva') {
   POLYS.push({ m: WOOD, p: rect(830, 330, 240, 12) }, { m: WOOD, p: rect(850, 640, 200, 12) }, { m: WOOD, p: rect(700, 160, 500, 12) });
 } else if (MAP_ID === 'ruinas') {
   // desert ruins over water: a long beam across the top, two big side pillars with ledges, a central pillar with decks
-  POLYS.push({ m: ROCK, p: [[150, 160], [1300, 185], [2450, 160], [2450, 215], [1300, 240], [150, 215]] });
+  POLYS.push({ m: ROCK, p: [[150, 150], [1300, 165], [2450, 150], [2450, 195], [1300, 210], [150, 195]] });
   symm(ROCK, [[0, 120], [190, 110], [240, 180], [230, 330], [190, 520], [200, 700], [270, 860], [340, 960], [420, 1030], [430, H], [0, H]]);
   symm(ROCK, [[230, 560], [420, 520], [520, 560], [470, 600], [250, 620]]);
   symm(ROCK, [[480, 380], [760, 300], [860, 300], [880, 340], [780, 380], [520, 450]]);
   symm(ROCK, [[500, 760], [700, 740], [850, 790], [800, 830], [600, 820], [500, 800]]);
   symm(ROCK, [[600, 260], [690, 260], [680, 330], [610, 330]]);
-  POLYS.push({ m: ROCK, p: [[1180, 240], [1420, 240], [1400, 340], [1390, 640], [1420, 780], [1180, 780], [1210, 640], [1200, 340]] });
-  POLYS.push({ m: WOOD, p: rect(1100, 430, 400, 16) }, { m: WOOD, p: rect(1100, 800, 400, 16) });
+  // the middle is kept open on purpose: just two small floating decks, so there is room to fly and fight around the centre
+  POLYS.push({ m: WOOD, p: rect(1160, 440, 280, 14) }, { m: WOOD, p: rect(1130, 780, 340, 14) });
   symm(WOOD, rect(560, 880, 260, 18));
 }
 if (VOLCANO) {
@@ -457,10 +457,9 @@ function decorateArena(w, tc, surf, rng, placeProp) {
   } else {
     // wooden posts holding the decks and rope rails
     w.fillStyle = '#5a3d26';
-    for (const px of [1135, 1465]) w.fillRect(px - 4, 446, 8, 354);
+    for (const px of [1210, 1390]) w.fillRect(px - 3, 456, 6, 324);
     for (const px of [610, 770, 1830, 1990]) w.fillRect(px - 4, 898, 8, 150);
     w.strokeStyle = 'rgba(70,48,30,.9)'; w.lineWidth = 2;
-    for (const [a, b] of [[1100, 1500]]) { w.beginPath(); w.moveTo(a, 424); w.quadraticCurveTo((a + b) / 2, 440, b, 424); w.stroke(); }
   }
   w.drawImage(tc, 0, 0);
   if (jungle) {
@@ -479,7 +478,7 @@ function decorateArena(w, tc, surf, rng, placeProp) {
     // sandstone cracks and a few blocks lying on the ledges
     w.strokeStyle = 'rgba(60,30,15,.35)'; w.lineWidth = 1;
     for (let k = 0; k < 160; k++) { const x = rng() * W, y = rng() * H; if (!mask[(y | 0) * W + (x | 0)] || mask[(y | 0) * W + (x | 0)] !== ROCK) continue; w.beginPath(); w.moveTo(x, y); w.lineTo(x + (rng() - .5) * 30, y + (rng() - .2) * 24); w.stroke(); }
-    for (const [bx, by] of [[520, 538], [2080, 538], [1230, 238], [1370, 238]]) { placeProp('sandbags', bx, 18, rng() < .5, by - 30); }
+    for (const [bx, by] of [[520, 538], [2080, 538]]) { placeProp('sandbags', bx, 18, rng() < .5, by - 30); }
     placeProp('barrel', 470, 22, false, 500); placeProp('barrel', 2130, 22, false, 500);
   }
   if (jungle) for (let x = 90; x < W; x += 210) LIGHTS.push({ x, y: 300 + (x % 3) * 220, r: 110, c: '150,255,160', a: .16 });
@@ -3030,7 +3029,7 @@ document.querySelectorAll('#modes button').forEach(b => {
     selMode = b.dataset.mode;
     try { localStorage.setItem('sr-mode', selMode); } catch (err) { /* ignore */ }
     document.querySelectorAll('#modes button').forEach(q => q.classList.toggle('on', q === b));
-    showCtfOpts();
+    showCtfOpts(); refreshRooms();
   };
 });
 showCtfOpts();
@@ -3061,8 +3060,8 @@ function hostRoom() {
   saveProfile(); applyMode();
   roomId = fixedRoom || Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 24 | 0]).join('');
   roomStatus('Criando sala...');
-  peer = new Peer(PEER_PREFIX + roomId);
-  peer.on('open', () => {
+  const me = peer = new Peer(PEER_PREFIX + roomId); // handlers use `me`, never the global, so a destroyed peer cannot touch a newer one
+  me.on('open', () => {
     netMode = 'host';
     const bi = soldiers.indexOf(bot); if (bi >= 0) soldiers.splice(bi, 1);
     const link = `${location.origin}${location.pathname}?sala=${roomId}&mapa=${MAP_ID}`;
@@ -3073,15 +3072,15 @@ function hostRoom() {
     if (fixedRoom) startGame();
     $('play').hidden = true; $('host').hidden = true;
   });
-  peer.on('connection', conn => {
+  me.on('connection', conn => {
     conn.on('data', m => onHostData(conn, m));
     conn.on('close', () => dropGuest(conn));
     conn.on('error', () => dropGuest(conn));
   });
   // the matchmaking socket drops after a while; reconnect so new players can still find the room
-  peer.on('disconnected', () => { if (!peer.destroyed) setTimeout(() => peer.reconnect(), 1000); });
-  peer.on('error', err => {
-    if (fixedRoom && err.type === 'unavailable-id' && netMode !== 'host') { peer.destroy(); joinRoom(fixedRoom); return; } // someone is already hosting it: join instead
+  me.on('disconnected', () => { if (!me.destroyed) setTimeout(() => { if (!me.destroyed) me.reconnect(); }, 1000); });
+  me.on('error', err => {
+    if (fixedRoom && err.type === 'unavailable-id' && netMode !== 'host') { me.destroy(); joinRoom(fixedRoom); return; } // someone is already hosting it: join instead
     if (netMode !== 'host') roomStatus(`Não deu para criar a sala (${err.type || err}). Tente de novo.`);
   });
 }
@@ -3139,46 +3138,52 @@ function hostSend() {
 }
 
 $('join').onclick = () => joinRoom(roomCode);
+// Joining a fixed room: if nobody answers within JOIN_TIMEOUT (stale host, blocked network) the attempt is dropped and, for a fixed room, this
+// player takes the room over as host; after two failed rounds it stops and says so instead of hanging on "Conectando".
+let joinTries = 0;
+const JOIN_TIMEOUT = 12000;
 function joinRoom(code) {
   if (!needPeer()) return;
   saveProfile();
   roomStatus('Conectando à sala...');
   $('join').hidden = true;
   netMode = 'guest'; soldiers.length = 0;
-  peer = new Peer();
-  peer.on('open', () => {
-    hostConn = peer.connect(PEER_PREFIX + code, { reliable: true });
-    hostConn.on('open', () => hostConn.send({ t: 'hello', name: myName, col: myColor }));
-    hostConn.on('data', m => { if (m && m.t === 'welcome') { myId = m.id; startGame(); } else if (m && m.t === 's') applySnapshot(m); });
-    hostConn.on('close', () => { running = false; $('overlay').style.display = 'flex'; roomStatus('A conexão com a sala caiu. Recarregue a página para entrar de novo.'); });
-  });
-  peer.on('error', err => { $('join').hidden = false; roomStatus(err.type === 'peer-unavailable' ? 'Sala não encontrada. Confira o link ou peça um novo.' : `Erro de conexão (${err.type || err}).`); });
-};
-// fixed rooms: the first to click hosts the code, whoever clicks next joins it.
-// EDIT HERE to change what each room is: map = 'inverno' | 'vulcao' | 'selva' | 'ruinas', mode = 'dm' | 'dove' | 'ctf'.
-// The peer code is derived from room + map + mode, so changing either gives a fresh room that never clashes with an old one.
-const ROOMS = [
-  { label: 'SALA 1', map: 'inverno', mode: 'dm' },
-  { label: 'SALA 2', map: 'inverno', mode: 'dm' },
-];
-const MAP_LABEL = { inverno: 'Inverno', vulcao: 'Vulcão', selva: 'Selva', ruinas: 'Ruínas' }, MODE_LABEL = { dm: 'Deathmatch', dove: 'Pomba de Ouro', ctf: 'Bandeira' };
-ROOMS.forEach((r, i) => { r.code = 'SL' + 'ABCDEFGH'[i] + r.map[0].toUpperCase() + ({ dm: 'D', dove: 'P', ctf: 'C' }[r.mode] || 'D') + 'X'; });
-function enterFixed(r) { selMode = r.mode; fixedRoom = r.code; $('fixed-rooms').hidden = true; hostRoom(); }
-for (const r of ROOMS) {
-  const b = document.createElement('button'); b.innerHTML = `${r.label}<br><small style="font-size:13px;font-weight:600">${MAP_LABEL[r.map]} · ${MODE_LABEL[r.mode]}</small>`;
-  b.onclick = () => {
-    if (MAP_ID !== r.map) {
-      saveProfile();
-      try { localStorage.setItem('sr-map', r.map); } catch (err) { /* ignore */ }
-      location.search = `?mapa=${r.map}&auto=${r.code}`; // the world is built at load, so switching map reloads
-      return;
-    }
-    enterFixed(r);
+  const me = peer = new Peer();
+  let done = false;
+  const giveUp = why => {
+    if (done) return; done = true; clearTimeout(timer);
+    try { if (hostConn) hostConn.close(); } catch (err) { /* ignore */ }
+    me.destroy(); hostConn = null;
+    netMode = 'solo'; if (!soldiers.includes(player)) soldiers.push(player); if (!soldiers.includes(bot)) soldiers.push(bot);
+    if (fixedRoom && ++joinTries <= 2) { roomStatus(`Sala sem resposta (${why}). Assumindo a sala...`); hostRoom(); return; }
+    $('fixed-rooms').hidden = false; $('join').hidden = !roomCode;
+    roomStatus(`Não consegui entrar na sala (${why}). Tente de novo em instantes ou use a outra sala.`);
   };
-  $('rooms').appendChild(b);
+  const timer = setTimeout(() => giveUp('tempo esgotado'), JOIN_TIMEOUT);
+  me.on('open', () => {
+    hostConn = me.connect(PEER_PREFIX + code, { reliable: true });
+    hostConn.on('open', () => hostConn.send({ t: 'hello', name: myName, col: myColor }));
+    hostConn.on('data', m => { if (m && m.t === 'welcome') { done = true; clearTimeout(timer); joinTries = 0; myId = m.id; startGame(); } else if (m && m.t === 's') applySnapshot(m); });
+    hostConn.on('close', () => { if (!done) { giveUp('conexão fechada'); return; } running = false; $('overlay').style.display = 'flex'; roomStatus('A conexão com a sala caiu. Recarregue a página para entrar de novo.'); });
+  });
+  me.on('error', err => {
+    if (!done) { giveUp(err.type === 'peer-unavailable' ? 'sala não encontrada' : String(err.type || err)); return; }
+    $('join').hidden = false; roomStatus(`Erro de conexão (${err.type || err}).`);
+  });
 }
+// fixed rooms: the first to click hosts the code, whoever clicks next joins it. A room is whatever map and mode are selected above,
+// and the code is derived from room + map + mode, so each combination is its own room that never clashes with another.
+const ROOMS = [{ label: 'SALA 1' }, { label: 'SALA 2' }];
+const MAP_LABEL = { inverno: 'Inverno', vulcao: 'Vulcão', selva: 'Selva', ruinas: 'Ruínas' }, MODE_LABEL = { dm: 'Deathmatch', dove: 'Pomba de Ouro', ctf: 'Bandeira' };
+const roomCodeFor = i => 'SL' + 'ABCDEFGH'[i] + MAP_ID[0].toUpperCase() + ({ dm: 'D', dove: 'P', ctf: 'C' }[selMode] || 'D') + 'X';
+function refreshRooms() { ROOMS.forEach((r, i) => { r.btn.innerHTML = `${r.label}<br><small style="font-size:13px;font-weight:600">${MAP_LABEL[MAP_ID]} · ${MODE_LABEL[selMode]}</small>`; }); }
+ROOMS.forEach((r, i) => {
+  r.btn = document.createElement('button');
+  r.btn.onclick = () => { fixedRoom = roomCodeFor(i); $('fixed-rooms').hidden = true; hostRoom(); };
+  $('rooms').appendChild(r.btn);
+});
+refreshRooms();
 if (roomCode) $('fixed-rooms').hidden = true;
-{ const auto = new URLSearchParams(location.search).get('auto'), r = ROOMS.find(q => q.code === auto); if (r && MAP_ID === r.map) enterFixed(r); }
 function applySnapshot(m) {
   const ids = new Set();
   for (const d of m.s) {
