@@ -758,7 +758,7 @@ const WEAPONS = [
   { name: 'Canhão Gravitacional', kick: 0, short: 'Gravitacional', mult: 0, delay: 20, mag: 4, reload: 170, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'gravity', charge: 90, noShell: true, img: 'gravity-cannon', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
   { name: 'Foguete Teleguiado', kick: .8, short: 'Teleguiado', mult: 1400, delay: 20, mag: 1, reload: 200, speed: 7, spread: 0, moveAcc: 0, push: 0, mods: [1.15, 1, .9], auto: false, kind: 'rocket', explosive: { r: 72 }, straight: true, life: 320, noShell: true, img: 'rocket-launcher', fire: null, cx: .3, cy: .66, fx: 0, fy: 0 },
   { name: 'Arma de Portais', kick: .1, short: 'Portais', mult: 0, delay: 14, mag: 8, reload: 60, speed: 34, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'portal', straight: true, life: 90, noShell: true, img: 'portal-gun', fire: null, cx: .25, cy: .6, fx: 0, fy: 0 },
-  { name: 'Congelador Criogênico', kick: 0, short: 'Criogênico', mult: 0, delay: 2, mag: 110, reload: 170, speed: 9, spread: .22, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'cryo', straight: true, life: 24, noShell: true, img: 'cryo-gun', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
+  { name: 'Congelador Criogênico', kick: 0, short: 'Criogênico', mult: 0, delay: 2, mag: 110, reload: 170, speed: 11.5, spread: .22, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'cryo', straight: true, life: 42, noShell: true, img: 'cryo-gun', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
   { name: 'Lançador de Buraco Negro', kick: .5, short: 'Buraco Negro', mult: 0, delay: 30, mag: 1, reload: 300, speed: 6.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'blackhole', straight: true, life: 110, noShell: true, img: 'blackhole-gun', fire: null, cx: .25, cy: .6, fx: 0, fy: 0 },
 ];
 const GRENADE = { mult: 1500, r: 85, fuse: 180 };
@@ -1094,7 +1094,10 @@ function updateSoldier(e) {
   const wn = WEAPONS[e.wi];
   if (wn.kind === 'boomerang') {
     e.ammo[e.wi] = e.hasBoom ? 1 : 0; e.reloadT = 0;
-    if (inp.fire && inp.firePressed && e.fireT <= 0 && e.hasBoom) { throwBoomerang(e); e.fireT = wn.delay; }
+    // hold to charge (a harder throw goes farther and hits harder), release to throw; after that, holding fire again steers it back
+    if (inp.fire && e.hasBoom && e.fireT <= 0) e.chargeT = Math.min(e.chargeT + 1, 60);
+    else if (e.chargeT > 0 && e.hasBoom && !inp.fire) { throwBoomerang(e, e.chargeT / 60); e.fireT = wn.delay; e.chargeT = 0; }
+    else if (!e.hasBoom) e.chargeT = 0;
   } else if (wn.kind === 'laser' || wn.kind === 'gravity') chargeWeapon(e, wn, inp);
   else {
   if (inp.reload && e.reloadT <= 0 && e.ammo[e.wi] < wn.mag) startReload(e, wn);
@@ -1137,15 +1140,15 @@ function startReload(e, w) { e.reloadT = w.reload; e.reloadStart = Math.max(0, e
 // Hitting a wall drops it; anyone without one picks it up by walking over it.
 const boomerangs = [];
 const BOOM_SPEED = 9.5, BOOM_LIFT = 0.85, BOOM_HOOK = 0.25; // lift = angle between the launch direction and the line to the target
-function throwBoomerang(e) {
+function throwBoomerang(e, pow = 0) {
   e.hasBoom = false; e.throwT = 14;
   const s = shoulder(e), x = s.x + Math.cos(e.aim) * 6, y = s.y + Math.sin(e.aim) * 6;
-  const reach = clamp(Math.hypot(e.input.aimX - x, e.input.aimY - y), 110, 520), a = e.aim;
+  const reach = 200 + 560 * pow, a = e.aim, spd = BOOM_SPEED + 3 * pow;
   const side = Math.cos(a) >= 0 ? 1 : -1, launch = a - side * BOOM_LIFT;
   // circle through the start and the target, tangent to the launch direction
-  const radius = reach / (2 * Math.sin(BOOM_LIFT)), arcT = radius * 2 * BOOM_LIFT / BOOM_SPEED;
-  boomerangs.push({ x, y, vx: Math.cos(launch) * BOOM_SPEED + e.vx * .3, vy: Math.sin(launch) * BOOM_SPEED + e.vy * .3, r: 0, owner: e, fly: true, age: 0, hit: [],
-    turn: side * BOOM_SPEED / radius, arcT });
+  const radius = reach / (2 * Math.sin(BOOM_LIFT)), arcT = radius * 2 * BOOM_LIFT / spd;
+  boomerangs.push({ x, y, vx: Math.cos(launch) * spd + e.vx * .3, vy: Math.sin(launch) * spd + e.vy * .3, r: 0, owner: e, fly: true, age: 0, hit: [], pow, spd, ret: false,
+    turn: side * spd / radius, arcT });
   knifeFx(s.x, s.y); emit({ t: 'kthrow', x: s.x, y: s.y });
 }
 function updateBoomerangs() {
@@ -1159,13 +1162,15 @@ function updateBoomerangs() {
         const a = m.age < m.arcT ? m.turn : -Math.sign(m.turn) * BOOM_HOOK, c = Math.cos(a), s = Math.sin(a), vx = m.vx;
         m.vx = vx * c - m.vy * s; m.vy = vx * s + m.vy * c;
       } else if (o && !o.dead) {
-        // steer toward the thrower's chest (blend velocity toward a homing vector, so it never orbits)
-        const tx = o.x - m.x, ty = o.y - 14 - m.y, d = Math.hypot(tx, ty) || 1, k = Math.min(0.12, 0.05 + (m.age - m.arcT) * 0.003);
-        m.vx += (tx / d * 10 - m.vx) * k; m.vy += (ty / d * 10 - m.vy) * k;
-        if (d < 18) { o.hasBoom = true; boomerangs.splice(i, 1); pickFx(o, 'boom'); continue; }
+        // the way back hits everyone again. It homes on the thrower's chest, or follows the cursor while the owner holds fire (like the guided rocket)
+        if (!m.ret) { m.ret = true; m.hit = []; }
+        const steer = !!(o.input && o.input.fire && !o.hasBoom), back = m.spd + 1.5;
+        const tx = (steer ? o.input.aimX : o.x) - m.x, ty = (steer ? o.input.aimY : o.y - 14) - m.y, d = Math.hypot(tx, ty) || 1, k = steer ? .1 : Math.min(0.12, 0.05 + (m.age - m.arcT) * 0.003);
+        m.vx += (tx / d * back - m.vx) * k; m.vy += (ty / d * back - m.vy) * k;
+        if (Math.hypot(o.x - m.x, o.y - 14 - m.y) < 18) { o.hasBoom = true; boomerangs.splice(i, 1); pickFx(o, 'boom'); continue; }
       }
-      const sp = Math.hypot(m.vx, m.vy); if (sp > 10) { m.vx *= 10 / sp; m.vy *= 10 / sp; }
-      if (m.age > 300 || (o && o.dead && m.age > m.arcT)) { m.fly = false; m.vx *= .3; continue; }
+      const sp = Math.hypot(m.vx, m.vy), cap = (m.spd || BOOM_SPEED) + 1.5; if (sp > cap) { m.vx *= cap / sp; m.vy *= cap / sp; }
+      if (m.age > 420 || (o && o.dead && m.age > m.arcT)) { m.fly = false; m.vx *= .3; continue; }
       const steps = Math.max(1, Math.ceil(Math.hypot(m.vx, m.vy) / 4));
       for (let st = 0; st < steps && m.fly; st++) {
         m.x += m.vx / steps; m.y += m.vy / steps;
@@ -1174,7 +1179,7 @@ function updateBoomerangs() {
         for (const t of soldiers) {
           if (t === o || t.dead || m.hit.includes(t)) continue;
           const [w, h] = dims(t);
-          if (Math.abs(m.x - t.x) < w / 2 + 4 && m.y > t.y - h - 4 && m.y < t.y + 2) { m.hit.push(t); hurt(t, m.y < t.y - h * 0.75 ? 120 : 80, o, 'Bumerangue', m.x, m.y, Math.sign(m.vx) || 1, 0); }
+          if (Math.abs(m.x - t.x) < w / 2 + 4 && m.y > t.y - h - 4 && m.y < t.y + 2) { m.hit.push(t); hurt(t, (m.y < t.y - h * 0.75 ? 120 : 80) * (1 + .6 * (m.pow || 0)) * (m.ret ? 1.15 : 1), o, 'Bumerangue', m.x, m.y, Math.sign(m.vx) || 1, 0); }
         }
       }
       continue;
@@ -1469,12 +1474,12 @@ function updateMolotovs() {
 function molotovBreak(m, t) {
   let x = m.x, y = m.y; for (let k = 0; k < 12 && solid(x, y); k++) { x -= m.vx / 6; y -= m.vy / 6; }
   const gy = groundBelow(x | 0, Math.max(0, y - 4 | 0));
-  fires.push({ x, y: gy, w: 58, life: 330, owner: m.owner });
+  fires.push({ x, y: gy, w: 110, life: 360, owner: m.owner });
   if (t && t !== true) { hurt(t, 18, m.owner, 'Molotov', x, y, 0, -1); t.burnT = 150; t.burnBy = m.owner; }
   molotovFx(x, gy); emit({ t: 'molo', x, y: gy });
 }
 function molotovFx(x, y) {
-  for (let i = 0; i < 22; i++) particles.push({ t: 'fire', x: x + rnd(-8, 8), y: y - rnd(0, 6), vx: rnd(-2.5, 2.5), vy: rnd(-3, -.5), life: rnd(18, 36), max: 36, s: rnd(2, 4) });
+  for (let i = 0; i < 34; i++) particles.push({ t: 'fire', x: x + rnd(-14, 14), y: y - rnd(0, 6), vx: rnd(-3.5, 3.5), vy: rnd(-3, -.5), life: rnd(18, 36), max: 36, s: rnd(2, 4) });
   for (let i = 0; i < 6; i++) particles.push({ t: 'spark', x, y: y - 3, vx: rnd(-3, 3), vy: rnd(-3, -1), life: rnd(14, 26), max: 26, s: 1 });
   noise(.22, 5200, volAt(x, y) * .5, 'highpass'); noise(.4, 600, volAt(x, y) * .6, 'lowpass');
 }
@@ -1490,7 +1495,7 @@ function updateFires() {
 function fireFx() {
   for (const f of fires) {
     const k = Math.min(1, f.life / 60);
-    for (let n = 0; n < 2; n++) if (Math.random() < .7 * k + .1) {
+    for (let n = 0; n < 3; n++) if (Math.random() < .7 * k + .1) {
       const x = f.x + rnd(-f.w / 2, f.w / 2) * k, y = groundBelow(x | 0, Math.max(0, f.y - 22 | 0));
       particles.push({ t: 'fire', x, y: y - 1, vx: rnd(-.2, .2), vy: rnd(-1.5, -.5), life: rnd(16, 30), max: 30, s: rnd(2, 4.2) });
     }
@@ -1545,7 +1550,7 @@ function updatePortals() {
     for (const t of soldiers) {
       if (t.dead || t.portalCD > 0) continue;
       const [tw, th] = dims(t);
-      if (Math.hypot(t.x - p.x, t.y - th / 2 - p.y) > 13) continue;
+      if (Math.hypot(t.x - p.x, t.y - th / 2 - p.y) > 17) continue;
       const sp = Math.max(Math.hypot(t.vx, t.vy), 3.2);
       t.x = q.x + q.nx * 12; t.y = q.y + q.ny * 12 + th / 2;
       for (let k = 0; k < 24 && collides(t.x, t.y, tw, th); k++) { t.x += q.nx; t.y += q.ny; }
@@ -1591,7 +1596,7 @@ function updateHoles() {
       if (d > HOLE_R) continue;
       const f = Math.pow(1 - d / HOLE_R, 1.3) * .55 * fade;
       t.vx += dx / (d || 1) * f; t.vy += dy / (d || 1) * f - GRAV * f; t.pullT = 3;
-      if (d < 24 && t !== h.owner && h.life % 2 === 0) hurt(t, 2.2, h.owner, 'Buraco Negro', cx, cy, -dx / (d || 1), -dy / (d || 1), true);
+      if (d < 24 && t !== h.owner && h.life % 2 === 0) hurt(t, 1.7, h.owner, 'Buraco Negro', cx, cy, -dx / (d || 1), -dy / (d || 1), true);
     }
     for (const b of bullets) {
       if (b.w.kind === 'blackhole') continue;
@@ -1802,7 +1807,16 @@ function updateBullets() {
     if (dead) bullets.splice(i, 1);
   }
   for (let i = grenades.length - 1; i >= 0; i--) {
-    const g = grenades[i]; g.vy += BULLET_GRAV;
+    const g = grenades[i]; g.vy += BULLET_GRAV; g.age = (g.age || 0) + 1;
+    // it goes off on contact with a soldier (not its thrower right after the throw) or a crate
+    let hit = false;
+    for (const t of soldiers) {
+      if (t.dead || (t === g.owner && g.age < 20)) continue;
+      const [tw, th] = dims(t);
+      if (Math.abs(g.x - t.x) < tw / 2 + 3 && g.y > t.y - th - 3 && g.y < t.y + 2) { hit = true; break; }
+    }
+    if (!hit) for (const k of CRATES) if (k.alive && Math.abs(g.x - k.x) < 14 && g.y > k.y - 25 && g.y < k.y + 2) { hit = true; break; }
+    if (hit) { explode(g.x, g.y - 2, GRENADE.r, GRENADE.mult, g.owner, 'Granada'); grenades.splice(i, 1); continue; }
     const nx = g.x + g.vx, ny = g.y + g.vy;
     if (solid(nx, ny)) {
       if (solid(nx, g.y)) g.vx *= -0.5; else g.x = nx;
@@ -2337,7 +2351,7 @@ function step() {
   for (const s of soldiers) { updateSoldier(s); groundFx(s); }
   updateBullets(); updateMolotovs(); updateHoles(); updatePortals(); updateFires(); updateKnives(); updateBoomerangs(); updateLivingWorld(); updateDove(); updateCtf(); updateParticles();
   frameTail();
-  if (netMode === 'host' && tick % 2 === 0) hostSend();
+  if (netMode === 'host') hostSend(); // every tick: halves the delay between what the host sees and what guests see
 }
 function frameTail() {
   aimKick *= 0.85; if (hitMarker > 0) hitMarker--;
@@ -2450,7 +2464,7 @@ function drawWorld() {
     const bk = b.w.kind;
     if (bk === 'rocket') { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.atan2(b.vy, b.vx)); ctx.fillStyle = 'rgba(255,215,150,.95)'; ctx.fillRect(-5, -1.3, 10, 2.6); ctx.fillStyle = 'rgba(255,120,40,.9)'; ctx.beginPath(); ctx.moveTo(-5, -1.8); ctx.lineTo(-11 - rnd(0, 3), 0); ctx.lineTo(-5, 1.8); ctx.fill(); ctx.restore(); continue; }
     if (bk === 'portal') { const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 7); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(120,190,255,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, 7); ctx.fill(); continue; }
-    if (bk === 'cryo') { const fl = Math.hypot(b.x - b.sx, b.y - b.sy); ctx.fillStyle = 'rgba(180,230,255,.55)'; ctx.beginPath(); ctx.arc(b.x, b.y, 1.2 + fl * .035, 0, 7); ctx.fill(); continue; }
+    if (bk === 'cryo') { const fl = Math.hypot(b.x - b.sx, b.y - b.sy); ctx.fillStyle = 'rgba(180,230,255,.55)'; ctx.beginPath(); ctx.arc(b.x, b.y, 1.2 + Math.min(fl, 300) * .03, 0, 7); ctx.fill(); continue; }
     if (bk === 'blackhole') { const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 9); g.addColorStop(0, 'rgba(210,150,255,1)'); g.addColorStop(1, 'rgba(110,50,230,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, 9, 0, 7); ctx.fill(); continue; }
     if (b.w.explosive) { ctx.fillStyle = '#ffcc66'; ctx.beginPath(); ctx.arc(b.x, b.y, 2.2, 0, 7); ctx.fill(); continue; }
     const sp = Math.hypot(b.vx, b.vy) || 1, ux = b.vx / sp, uy = b.vy / sp, flown = Math.hypot(b.x - b.sx, b.y - b.sy);
@@ -2530,10 +2544,10 @@ function drawPortals() {
     const active = !!portalPair(p), col = p.idx ? '255,150,50' : '70,160,255', pulse = .85 + .15 * Math.sin(tick * .2 + p.idx * 2);
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(p.ny, p.nx)); // local x = surface normal, the oval's long axis runs along the wall
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = active ? 1 : .45;
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 18); g.addColorStop(0, `rgba(${col},${.5 * pulse})`); g.addColorStop(1, `rgba(${col},0)`);
-    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, 8, 18, 0, 0, 7); ctx.fill();
-    ctx.strokeStyle = `rgba(${col},${.95 * pulse})`; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.ellipse(0, 0, 4.2, 13, 0, 0, 7); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = .8; ctx.beginPath(); ctx.ellipse(0, 0, 3.4, 12, 0, 0, 7); ctx.stroke();
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 24); g.addColorStop(0, `rgba(${col},${.5 * pulse})`); g.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, 10, 24, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = `rgba(${col},${.95 * pulse})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(0, 0, 5.5, 17, 0, 0, 7); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, 0, 4.5, 16, 0, 0, 7); ctx.stroke();
     ctx.restore();
   }
 }
@@ -2936,6 +2950,7 @@ function drawHUD() {
   for (let q = 0; q < 4; q++) { const a = q * Math.PI / 2; ctx.beginPath(); ctx.arc(mx, my, cr, a - 0.5, a + 0.5); ctx.stroke(); }
   ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(mx - 1, my - 1, 2, 2);
   if (p.reloadT > 0) { ctx.strokeStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(mx, my, gap + 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - p.reloadT / w.reload)); ctx.stroke(); }
+  if (w.kind === 'boomerang' && p.chargeT > 0) { ctx.strokeStyle = '#8fe6ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(mx, my, gap + 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.chargeT / 60); ctx.stroke(); }
 }
 
 let planksApplied = false, rockApplied = false;
@@ -2963,6 +2978,7 @@ function render() {
   if (!planksApplied && worldCanvas && MAP.planks && ready(IMG['wood-planks'])) applyPlanks();
   if (!rockApplied && ROCK_LAYERS && ready(IMG.rock)) applyRock();
   drawBackground();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = `rgba(0,0,0,${VOLCANO ? .08 : ARENA ? .24 : .2})`; ctx.fillRect(0, 0, SW, SH); // slightly darker backdrop so it does not blend with the players
   drawWorld();
   drawPost();
   drawHUD();
@@ -3268,7 +3284,7 @@ function guestStep() {
     if (g.flashT > 0) g.flashT--;
     if (g.dead) continue;
     g.tx += g.vx; g.ty += g.vy;
-    g.x += (g.tx - g.x) * 0.35; g.y += (g.ty - g.y) * 0.35;
+    g.x += (g.tx - g.x) * 0.5; g.y += (g.ty - g.y) * 0.5;
     if (g.jetting) jetFx(g);
     groundFx(g);
   }
