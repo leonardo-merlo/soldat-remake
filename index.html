@@ -51,6 +51,7 @@
   <div id="map-pick"><label>Mapa</label><div id="maps"><button data-map="inverno">INVERNO</button><button data-map="vulcao">VULCÃO</button><button data-map="selva">SELVA</button><button data-map="espaco">ESPAÇO</button></div></div>
   <div id="mode-pick"><label>Modo</label><div id="modes"><button data-mode="dm">DEATHMATCH</button><button data-mode="dove">POMBA DE OURO</button><button data-mode="ctf">BANDEIRA</button></div>
     <div id="ctf-opts" hidden><label for="ctf-target">Capturas para vencer</label><input id="ctf-target" type="number" min="1" max="10" value="3"></div></div>
+  <label id="hq-row" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="hq"> Gráficos em alta qualidade (mais pesado)</label>
   <button id="join" hidden>ENTRAR NA SALA</button>
   <div id="fixed-rooms"><label>Sala fixa (sem link)</label><div id="rooms"></div></div>
   <button id="play">TREINAR COM BOT</button>
@@ -76,6 +77,7 @@
     <tr><td>F</td><td>Arremessar faca (passe por cima dela para recuperar)</td></tr>
     <tr><td>F1 (segurar) / F2</td><td>Placar / minimapa</td></tr>
     <tr><td>R</td><td>Recarregar</td></tr>
+    <tr><td>B (segurar)</td><td>Construtor de Muros: gira o muro. A silhueta mostra onde ele vai ficar</td></tr>
     <tr><td>G</td><td>Bandeira: arremessa a bandeira que você carrega (para um colega ou por cima de obstáculos)</td></tr>
     <tr><td>E (segurar e soltar)</td><td>Granada: quanto mais segura, mais longe vai</td></tr>
     <tr><td>Botão esquerdo (segurar)</td><td>Laser/Gravitacional: carregar e soltar. Motosserra e Criogênico: contínuo</td></tr>
@@ -155,11 +157,9 @@ function groundHVolcano(x) {
 }
 function groundH(x) {
   if (VOLCANO) return groundHVolcano(x);
-  let h = 1235 + 22 * Math.sin(x / 170) + 12 * Math.sin(x / 61 + 2);
-  if (x > 1560 && x < 2160) h += 105 * Math.sin(Math.PI * (x - 1560) / 600);
-  if (x > 2250 && x < 2700) h -= 55 * Math.sin(Math.PI * (x - 2250) / 450);
-  if (x < 260) h -= (260 - x) * 1.6;
-  if (x > 3000) h -= (x - 3000) * 2.2;
+  const u = Math.min(x, W - x); // the winter map is mirrored left/right as well
+  let h = 1235 + 22 * Math.sin(u / 170) + 12 * Math.sin(u / 61 + 2);
+  if (u < 260) h -= (260 - u) * 1.6;
   return h;
 }
 const POLYS = [];
@@ -175,26 +175,26 @@ const MAP = MAP_ID === 'selva' ? {
   spawns: [[260, 410], [1640, 410], [330, 840], [1570, 840], [950, 620]],
   crates: [[400, 250], [1500, 250], [950, 300], [950, 620], [560, 440], [1340, 440], [240, 780], [1660, 780]],
   lanterns: [], planks: null, lava: [], pit: 0,
-  flags: [[255, 400], [1645, 400]], waterfall: { x: 950, y0: 345, y1: 925, w: 44 },
+  flags: [[255, 400], [1645, 400]], dove: [950, 560], waterfall: { x: 950, y0: 345, y1: 925, w: 44 },
 } : MAP_ID === 'espaco' ? {
   spawns: [[330, 500], [2270, 500], [690, 860], [1910, 860], [1300, 420]],
   crates: [[400, 480], [2200, 480], [1300, 420], [700, 840], [1900, 840], [1300, 760], [700, 260], [1900, 260]],
   lanterns: [], planks: null, lava: [], pit: 1030, pitName: 'Vazio', pitMsg: 'Você caiu no vazio', grav: .5, jet: 1.2, // low gravity: long floaty falls, strong jetpack
-  flags: [[330, 500], [2270, 500]],
+  flags: [[330, 500], [2270, 500]], dove: [1300, 350],
 } : VOLCANO ? {
   spawns: [900, 2300, 1080, 2120, 780, 2420],
   crates: [[700, 880], [2500, 880], [1000, 1200], [2200, 1200], [330, 640], [2870, 640], [940, 670], [2260, 670], [1260, 700], [1940, 700], [1450, 840], [1750, 840], [1600, 1180], [1600, 620]],
   lanterns: [560, 800, 1000, 2200, 2400, 2640],
   planks: null,
   lava: [{ x0: 380, x1: 660, y: 1282 }, { x0: 1250, x1: 1950, y: 1296 }, { x0: 2540, x1: 2820, y: 1282 }],
-  flags: [[700, 850], [2500, 850]],
+  flags: [[700, 850], [2500, 850]], dove: [1600, 1100],
 } : {
-  spawns: [640, 2600, 1900, 2300],
-  crates: [[560, 900], [1380, 880], [1690, 620], [2050, 1100], [2450, 1000], [2700, 380], [330, 600], [905, 600], [640, 1010], [1060, 1010], [1790, 1100], [2290, 1000], [2880, 1000], [420, 1000]],
-  lanterns: [335, 905, 1545, 2240, 2560, 2860],
-  planks: { x: 470, y: 985, w: 800, h: 14 },
+  spawns: [640, 2560, 1000, 2200, 420, 2780],
+  crates: [[560, 900], [2640, 900], [330, 600], [2870, 600], [905, 600], [2295, 600], [640, 1010], [2560, 1010], [1060, 1010], [2140, 1010], [420, 1000], [2780, 1000], [1380, 880], [1820, 880], [1600, 640]],
+  lanterns: [335, 905, 2295, 2865],
+  planks: [{ x: 470, y: 985, w: 800, h: 14 }, { x: 1930, y: 985, w: 800, h: 14 }],
   lava: [],
-  flags: [[560, 900], [2850, 300]],
+  flags: [[560, 900], [2640, 900]], dove: [1600, 900],
 };
 if (MAP_ID === 'selva') {
   // closed jungle cave: walls and floor, hanging rocks, mossy logs, tree-house platforms and a waterfall pool in the middle
@@ -235,14 +235,16 @@ if (VOLCANO) {
   POLYS.push({ m: ROCK, p: [[1560, 640], [1600, 624], [1640, 640], [1620, 662], [1580, 662]] });
   symm(ROCK, [[1210, 730], [1270, 712], [1340, 718], [1370, 742], [1310, 760], [1230, 756]]);
 } else if (!ARENA) {
-POLYS.push({ m: CONC, p: rect(250, 640, 150, 36) });
-POLYS.push({ m: CONC, p: rect(300, 760, 170, 34) });
-POLYS.push({ m: WOOD, p: rect(470, 985, 800, 14) });
-POLYS.push({ m: WOOD, p: rect(690, 957, 34, 28) });
-POLYS.push({ m: ROCK, p: [[1250, 985], [1290, 945], [1370, 925], [1450, 950], [1520, 1000], [1570, 1050], [1615, 1110], [1590, 1128], [1530, 1108], [1470, 1118], [1430, 1180], [1415, 1260], [1380, 1300], [1260, 1300], [1240, 1120]] });
-POLYS.push({ m: ROCK, p: [[1560, 700], [1650, 668], [1760, 684], [1810, 724], [1740, 772], [1620, 768]] });
-POLYS.push({ m: CONC, p: rect(820, 640, 170, 18) });
-POLYS.push({ m: ROCK, p: [[2040, 525], [2140, 470], [2340, 450], [2600, 470], [2850, 428], [3050, 398], [W, 380], [W, 1300], [3080, 1300], [3040, 1150], [3000, 1010], [3030, 870], [2960, 745], [2810, 695], [2600, 708], [2450, 688], [2300, 655], [2180, 645], [2090, 605]] });
+// mirrored map: everything on the left half has a twin on the right half
+POLYS.push({ m: ROCK, p: mirrorPoly([[0, 150], [70, 170], [130, 330], [120, 520], [175, 690], [150, 860], [215, 1040], [240, 1200], [0, 1300]]) });
+symm(CONC, rect(250, 640, 150, 36));
+symm(CONC, rect(300, 760, 170, 34));
+symm(WOOD, rect(470, 985, 800, 14));
+symm(WOOD, rect(690, 957, 34, 28));
+// the central mound: two halves meeting in a valley at the middle
+symm(ROCK, [[1250, 985], [1290, 945], [1370, 925], [1450, 950], [1520, 1000], [1570, 1050], [1600, 1100], [1600, 1300], [1380, 1300], [1240, 1120]]);
+symm(ROCK, [[1330, 690], [1420, 668], [1530, 684], [1580, 724], [1510, 772], [1390, 768]]);
+symm(CONC, rect(820, 640, 170, 18));
 }
 
 const mask = new Uint8Array(W * H);
@@ -269,7 +271,10 @@ function lavaAt(x, y) {
 function lavaAhead(x) { for (const L of MAP.lava) if (L.path && x >= L.lx0 - 10 && x <= L.lx1 + 10) return L; return null; }
 const LIGHTS = [];
 let worldCanvas = null, ROCK_LAYERS = null;
-const WS = Math.min(2, 4096 / W); // baked world pixels per world unit; kept under 4096 px wide because larger canvases are drawn partially by some GPUs
+// baked world pixels per world unit. 1 is the fast default; "alta qualidade" (lobby checkbox or ?q=alta) bakes more pixels for sharper textures but
+// costs a lot more every frame. Kept under 4096 px wide because larger canvases are drawn partially by some GPUs.
+const HQ = (() => { try { return new URLSearchParams(location.search).get('q') === 'alta' || localStorage.getItem('sr-q') === 'alta'; } catch (err) { return false; } })();
+const WS = HQ ? Math.min(2, 4096 / W) : 1;
 
 function buildWorld() {
   const mc = mkCanvas(W, H), m = mc.getContext('2d', { willReadFrequently: true });
@@ -371,53 +376,42 @@ function buildWorld() {
   if (VOLCANO) decorateVolcano(w, tc, surf, rng, placeProp);
   else if (ARENA) decorateArena(w, tc, surf, rng, placeProp);
   else {
-  // pines on the topmost rock surfaces
-  for (let x = 20; x < W - 20; x += 2) {
-    if (rng() < 0.03 && mask[surf[x] * W + x] === ROCK && Math.abs(surf[x + 6] - surf[x - 6]) < 18) drawPine(w, x, surf[x] + 4, 30 + rng() * 70, rng);
+  // pines on the topmost rock surfaces (the same pines on both halves)
+  for (let x = 20; x < W / 2; x += 2) {
+    if (rng() < 0.03 && mask[surf[x] * W + x] === ROCK && Math.abs(surf[x + 6] - surf[x - 6]) < 18) { const ph = 30 + rng() * 70; drawPine(w, x, surf[x] + 4, ph, rng); drawPine(w, W - x, surf[W - x] + 4, ph, rng); }
   }
+  const SIDES = [false, true], X = (m, v) => m ? W - v : v;
   // steel truss under the tower blocks
-  w.strokeStyle = '#596170'; w.lineWidth = 4;
-  for (const bx of [270, 380]) { w.beginPath(); w.moveTo(bx, 676); w.lineTo(bx, groundH(bx)); w.stroke(); }
-  for (const bx of [320, 450]) { w.beginPath(); w.moveTo(bx, 794); w.lineTo(bx, groundH(bx)); w.stroke(); }
-  w.lineWidth = 2;
-  for (let y = 700; y < 1170; y += 40) { w.beginPath(); w.moveTo(270, y); w.lineTo(380, y + 40); w.moveTo(380, y); w.lineTo(270, y + 40); w.stroke(); }
-  // bridge pillars + braces
-  for (const px of [500, 740, 980, 1220]) {
-    const gy = groundH(px);
-    const gr = w.createLinearGradient(px - 9, 0, px + 9, 0); gr.addColorStop(0, '#3a3128'); gr.addColorStop(.5, '#5a4a3a'); gr.addColorStop(1, '#2a231c');
-    w.fillStyle = gr; w.fillRect(px - 9, 999, 18, gy - 999 + 10);
-    w.fillStyle = '#e6eef8'; w.fillRect(px - 10, 999, 20, 3);
+  for (const m of SIDES) {
+    w.strokeStyle = '#596170'; w.lineWidth = 4;
+    for (const bx of [270, 380]) { w.beginPath(); w.moveTo(X(m, bx), 676); w.lineTo(X(m, bx), groundH(X(m, bx))); w.stroke(); }
+    for (const bx of [320, 450]) { w.beginPath(); w.moveTo(X(m, bx), 794); w.lineTo(X(m, bx), groundH(X(m, bx))); w.stroke(); }
+    w.lineWidth = 2;
+    for (let y = 700; y < 1170; y += 40) { w.beginPath(); w.moveTo(X(m, 270), y); w.lineTo(X(m, 380), y + 40); w.moveTo(X(m, 380), y); w.lineTo(X(m, 270), y + 40); w.stroke(); }
+    // bridge pillars + braces
+    for (const px0 of [500, 740, 980, 1220]) {
+      const px = X(m, px0), gy = groundH(px), gr = w.createLinearGradient(px - 9, 0, px + 9, 0); gr.addColorStop(0, '#3a3128'); gr.addColorStop(.5, '#5a4a3a'); gr.addColorStop(1, '#2a231c');
+      w.fillStyle = gr; w.fillRect(px - 9, 999, 18, gy - 999 + 10);
+      w.fillStyle = '#e6eef8'; w.fillRect(px - 10, 999, 20, 3);
+    }
+    w.strokeStyle = 'rgba(70,58,46,.9)'; w.lineWidth = 3;
+    for (let i = 0; i < 3; i++) { const a = X(m, 500 + i * 240), b = X(m, 740 + i * 240); w.beginPath(); w.moveTo(a, 1005); w.lineTo(b, 1110); w.moveTo(b, 1005); w.lineTo(a, 1110); w.stroke(); }
   }
-  w.strokeStyle = 'rgba(70,58,46,.9)'; w.lineWidth = 3;
-  for (let i = 0; i < 3; i++) { const a = 500 + i * 240, b = a + 240; w.beginPath(); w.moveTo(a, 1005); w.lineTo(b, 1110); w.moveTo(b, 1005); w.lineTo(a, 1110); w.stroke(); }
   w.drawImage(tc, 0, 0);
-  // railing on bridge
-  w.strokeStyle = '#3d3226'; w.lineWidth = 3;
-  for (let x = 480; x <= 1260; x += 65) { w.beginPath(); w.moveTo(x, 985); w.lineTo(x, 962); w.stroke(); w.fillStyle = '#e6eef8'; w.fillRect(x - 2, 960, 4, 2); LIGHTS.push({ x, y: 960, r: 22, c: '255,190,110', a: .5 }); }
-  w.strokeStyle = 'rgba(150,130,90,.8)'; w.lineWidth = 1.2;
-  for (let x = 480; x < 1260; x += 65) { w.beginPath(); w.moveTo(x, 964); w.quadraticCurveTo(x + 32, 974, x + 65, 964); w.stroke(); }
-  // lamp posts
-  for (const lx of [520, 1180, 2300, 2720, 900]) {
-    const ly = lx === 900 ? 640 : (lx < 1300 ? 985 : surf[lx]);
-    drawLamp(w, lx, ly + 2);
+  // railing on both bridges
+  for (const m of SIDES) {
+    w.strokeStyle = '#3d3226'; w.lineWidth = 3;
+    for (let x = 480; x <= 1260; x += 65) { const px = X(m, x); w.beginPath(); w.moveTo(px, 985); w.lineTo(px, 962); w.stroke(); w.fillStyle = '#e6eef8'; w.fillRect(px - 2, 960, 4, 2); LIGHTS.push({ x: px, y: 960, r: 22, c: '255,190,110', a: .5 }); }
+    w.strokeStyle = 'rgba(150,130,90,.8)'; w.lineWidth = 1.2;
+    for (let x = 480; x < 1260; x += 65) { const a = X(m, x), b = X(m, x + 65); w.beginPath(); w.moveTo(a, 964); w.quadraticCurveTo((a + b) / 2, 974, b, 964); w.stroke(); }
+    // lamp posts
+    for (const lx of [520, 1180, 900]) drawLamp(w, X(m, lx), (lx === 900 ? 640 : 985) + 2);
   }
-  placeProp('watchtower', 2470, 120);
-  placeProp('tent', 2800, 42);
-  placeProp('fence', 2640, 22);
-  placeProp('sandbags', 1340, 19);
-  placeProp('sandbags', 1150, 17, true);
-  placeProp('signpost', 1296, 40);
-  placeProp('barrel', 2930, 24);
-  placeProp('fence', 400, 21);
-  // lower part of the map
-  placeProp('sandbags', 760, 19, false, 1010); placeProp('barrel', 905, 24, false, 1010); placeProp('barrel', 919, 24, false, 1010);
-  placeProp('fence', 1180, 21, true, 1010);
-  placeProp('barrel', 1700, 24, false, 1100); placeProp('barrel', 1714, 24, false, 1100);
-  placeProp('sandbags', 1940, 19, true, 1100); placeProp('signpost', 2080, 38, true, 1100);
-  placeProp('tent', 2380, 40, true, 1000); placeProp('sandbags', 2560, 19, false, 1000); placeProp('fence', 2760, 22, false, 1000);
-  placeProp('barrel', 2850, 24, false, 1000); placeProp('sandbags', 300, 18, false, 1000);
+  // scenery, placed once for the left half and mirrored (images flipped) for the right half
+  const PROPS = [['watchtower', 1380, 120], ['tent', 330, 42, false, 1000], ['sandbags', 1290, 19], ['signpost', 1230, 40], ['fence', 400, 21], ['sandbags', 760, 19, false, 1010], ['barrel', 905, 24, false, 1010], ['barrel', 919, 24, false, 1010], ['fence', 1180, 21, true, 1010], ['sandbags', 520, 18, false, 1000]];
+  for (const [key, x, h, flip, y0] of PROPS) { placeProp(key, x, h, !!flip, y0); placeProp(key, W - x, h, !flip, y0); }
   // painted crate over the solid crate polygon, and small rocks scattered on the ground
-  if (ready(IMG.crate)) w.drawImage(IMG.crate, 688, 951, 38, 36);
+  if (ready(IMG.crate)) { w.drawImage(IMG.crate, 688, 951, 38, 36); w.drawImage(IMG.crate, W - 688 - 38, 951, 38, 36); }
   if (ready(IMG['rock-small'])) {
     const rk = IMG['rock-small'];
     for (let x = 30; x < W - 30; x += 37) {
@@ -805,14 +799,14 @@ const WEAPONS = [
   { name: 'XM214 Minigun', kick: .2, short: 'Minigun', mult: .468, delay: 3, mag: 100, reload: 480, speed: 29, spread: .3, moveAcc: .0625, push: .0104, mods: [1.1, .95, .85], auto: true, kind: 'minigun', startup: 25, img: 'minigun', fire: 'minigun-fire', cx: .05, cy: .5, fx: -.2, fy: .45 },
   { name: 'Bumerangue', kick: 0, short: 'Bumerangue', mult: 0, delay: 20, mag: 1, reload: 1, speed: 9.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'boomerang', img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
   // new arms: sprites sliced from the weapon sheet (assets/weapons/<img>.png), effects drawn by code
-  { name: 'Motosserra', kick: 0, short: 'Motosserra', mult: 0, delay: 3, mag: 150, reload: 140, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'chainsaw', reach: 30, dmg: 9, noShell: true, img: 'chainsaw', fire: null, cx: .3, cy: .55, fx: 0, fy: 0 },
+  { name: 'Motosserra', kick: 0, short: 'Motosserra', mult: 0, delay: 3, mag: 150, reload: 140, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'chainsaw', noPartial: true, reach: 30, dmg: 9, noShell: true, img: 'chainsaw', fire: null, cx: .3, cy: .55, fx: 0, fy: 0 },
   { name: 'Rifle de Raio Laser', kick: 0, short: 'Laser', mult: 0, delay: 24, mag: 4, reload: 200, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'laser', charge: 90, range: 1500, noShell: true, img: 'laser-rifle', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
   { name: 'Molotov', kick: 0, short: 'Molotov', mult: 0, delay: 30, mag: 3, reload: 150, speed: 7.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'molotov', noShell: true, rot: Math.PI / 2, img: 'molotov', fire: null, cx: .5, cy: .78, fx: 0, fy: 0 },
   { name: 'Canhão Gravitacional', kick: 0, short: 'Gravitacional', mult: 0, delay: 20, mag: 4, reload: 170, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'gravity', charge: 90, noShell: true, img: 'gravity-cannon', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
   { name: 'Foguete Teleguiado', kick: .8, short: 'Teleguiado', mult: 1400, delay: 20, mag: 1, reload: 200, speed: 7, spread: 0, moveAcc: 0, push: 0, mods: [1.15, 1, .9], auto: false, kind: 'rocket', explosive: { r: 72 }, straight: true, life: 320, noShell: true, img: 'rocket-launcher', fire: null, cx: .3, cy: .66, fx: 0, fy: 0 },
   { name: 'Arma de Portais', kick: .1, short: 'Portais', mult: 0, delay: 14, mag: 8, reload: 60, speed: 34, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'portal', straight: true, life: 90, noShell: true, img: 'portal-gun', fire: null, cx: .25, cy: .6, fx: 0, fy: 0 },
-  { name: 'Congelador Criogênico', kick: 0, short: 'Criogênico', mult: 0, delay: 2, mag: 110, reload: 170, speed: 11.5, spread: .22, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'cryo', straight: true, life: 42, noShell: true, img: 'cryo-gun', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
-  { name: 'Lança-chamas', kick: 0, short: 'Lança-chamas', mult: 0, delay: 2, mag: 140, reload: 200, speed: 8.5, spread: .2, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'flame', straight: true, life: 34, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
+  { name: 'Congelador Criogênico', kick: 0, short: 'Criogênico', mult: 0, delay: 2, mag: 110, reload: 170, speed: 11.5, spread: .22, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'cryo', noPartial: true, straight: true, life: 42, noShell: true, img: 'cryo-gun', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
+  { name: 'Lança-chamas', kick: 0, short: 'Lança-chamas', mult: 0, delay: 2, mag: 140, reload: 200, speed: 8.5, spread: .2, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'flame', noPartial: true, straight: true, life: 34, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
   { name: 'Construtor de Muros', kick: 0, short: 'Construtor', mult: 0, delay: 18, mag: 3, reload: 220, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'builder', range: 170, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
   { name: 'Lançador de Buraco Negro', kick: .5, short: 'Buraco Negro', mult: 0, delay: 30, mag: 1, reload: 300, speed: 6.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'blackhole', straight: true, life: 110, noShell: true, img: 'blackhole-gun', fire: null, cx: .25, cy: .6, fx: 0, fy: 0 },
 ];
@@ -977,7 +971,7 @@ function palette(hex) { return { main: hex, dark: mixHex(hex, '#000000', .45), d
 let tick = 0;
 function makeSoldier(name, col, x, y, isBot, id) {
   return { id, name, col, C: palette(col), isBot, x, y, tx: x, ty: y, vx: 0, vy: 0, hp: MAX_HEALTH, jet: START_JET, jetting: false, stance: 'stand', wantProne: false, onGround: false, aim: 0, facing: 1,
-    wi: 2, lastWi: 0, sec: 0, team: 0, pitDeath: false, chargeT: 0, gravT: 0, freezeT: 0, chill: 0, burnT: 0, burnBy: null, flingT: 0, flingBy: null, pullT: 0, buff: '', buffT: 0, potions: 2, portalN: 0, portalCD: 0, dp: 0, flipLen: 24, rollT: -1, rollDir: 1, flipT: -1, jumpDir: 0, flipPending: false, lastKillT: -999, streak: 0, ammo: WEAPONS.map(w => w.mag), reloadT: 0, fireT: 0, startT: 0, flashT: 0, jumpT: -1, dead: false, respawnT: 0, protect: 60, anim: 0, kills: 0, deaths: 0,
+    wi: 2, lastWi: 0, sec: 0, wallAng: Math.PI / 2, team: 0, pitDeath: false, chargeT: 0, gravT: 0, freezeT: 0, chill: 0, burnT: 0, burnBy: null, flingT: 0, flingBy: null, pullT: 0, buff: '', buffT: 0, potions: 2, portalN: 0, portalCD: 0, dp: 0, flipLen: 24, rollT: -1, rollDir: 1, flipT: -1, jumpDir: 0, flipPending: false, lastKillT: -999, streak: 0, ammo: WEAPONS.map(w => w.mag), reloadT: 0, fireT: 0, startT: 0, flashT: 0, jumpT: -1, dead: false, respawnT: 0, protect: 60, anim: 0, kills: 0, deaths: 0,
     grenades: 3, gT: 0, gCool: 0, gCharge: -1, hitFlash: 0, hasKnife: true, hasBoom: true, throwT: 0, armor: 0, flipCool: 0, reloadStart: 0, flipDir: 0, slideT: 0, prevFacing: 0,
     input: {}, ai: { timer: 0, strafe: 1, pref: 250, seen: 0, err: 0, errT: 0, jetting: false, crouch: false, nadeT: 0 } };
 }
@@ -1152,6 +1146,7 @@ function updateSoldier(e) {
   if (inp.switchTo != null && inp.switchTo !== e.wi) { if (inp.switchTo === e.sec) e.sec = e.wi; e.lastWi = e.wi; e.wi = inp.switchTo; holster(); }
   if (inp.potionPressed) drinkPotion(e);
   if (inp.flagPressed) throwFlag(e);
+  if (inp.wallRot && WEAPONS[e.wi].kind === 'builder') e.wallAng = (e.wallAng + .05) % Math.PI; // hold B: spin the wall (it looks the same every half turn)
   if (e.fireT > 0) e.fireT--;
   if (e.reloadT > 0 && --e.reloadT === 0) e.ammo[e.wi] = WEAPONS[e.wi].mag;
   const wn = WEAPONS[e.wi];
@@ -1164,7 +1159,7 @@ function updateSoldier(e) {
   } else if (wn.kind === 'laser' || wn.kind === 'gravity') chargeWeapon(e, wn, inp);
   else {
   if (inp.reload && e.reloadT <= 0 && e.ammo[e.wi] < wn.mag) startReload(e, wn);
-  if (inp.fire && e.fireT <= 0 && e.reloadT > 0 && (wn.auto || inp.firePressed)) {
+  if (inp.fire && e.fireT <= 0 && e.reloadT > 0 && (wn.auto || inp.firePressed) && !wn.noPartial) {
     const loaded = reloadedAmmo(e);
     if (loaded > e.reloadStart) { e.ammo[e.wi] = loaded; e.reloadT = 0; }
   }
@@ -1680,55 +1675,82 @@ function holeVisualFx() {
   for (const h of holes) for (let n = 0; n < 2; n++) particles.push({ t: 'vort', cx: h.x, cy: h.y, a: rnd(0, 6.28), r: rnd(40, 110), w: .2, life: 30, max: 30, col: Math.random() < .5 ? '170,90,255' : '110,60,220' });
 }
 
-// --- wall builder: drops a slab of iron ahead (a standing wall when aiming sideways, a floor/ceiling slab when aiming up or down).
+// --- wall builder: drops a slab of iron at the aim point (up to `range` away). A translucent ghost shows where it will go; hold B to rotate it.
 // Soldiers and bullets cannot pass it until it is shot apart or times out: use it to defend or to box an enemy in.
-const walls = [];
-function wallFits(x0, y0, ww, hh) {
-  if (x0 < 4 || y0 < 4 || x0 + ww > W - 4 || y0 + hh > (MAP.pit || H) - 6) return false;
-  for (let y = y0; y < y0 + hh; y += 3) for (let x = x0; x < x0 + ww; x += 3) if (mask[y * W + x]) return false;
-  for (const t of soldiers) { if (t.dead) continue; const [tw, th] = dims(t); if (t.x + tw / 2 + 2 > x0 && t.x - tw / 2 - 2 < x0 + ww && t.y + 2 > y0 && t.y - th - 2 < y0 + hh) return false; }
+const walls = [], WALL_L = 80, WALL_T = 14;
+function wallFits(cx, cy, ang) {
+  const c = Math.cos(ang), sn = Math.sin(ang);
+  for (let u = -WALL_L / 2; u <= WALL_L / 2; u += 4) for (let v = -WALL_T / 2; v <= WALL_T / 2; v += 3.5) {
+    const x = cx + u * c - v * sn, y = cy + u * sn + v * c;
+    if (x < 4 || y < 4 || x > W - 4 || y > (MAP.pit || H) - 6 || mask[(y | 0) * W + (x | 0)]) return false;
+  }
+  for (const t of soldiers) {
+    if (t.dead) continue;
+    for (const py of [t.y - 2, t.y - 12, t.y - 22]) {
+      const du = (t.x - cx) * c + (py - cy) * sn, dv = -(t.x - cx) * sn + (py - cy) * c;
+      if (Math.abs(du) < WALL_L / 2 + 5 && Math.abs(dv) < WALL_T / 2 + 6) return false;
+    }
+  }
   return true;
 }
-function buildWall(e, w) {
-  const s = shoulder(e), c = Math.cos(e.aim), sn = Math.sin(e.aim), vertical = Math.abs(sn) < .72, ww = vertical ? 14 : 80, hh = vertical ? 80 : 14;
-  const far = Math.min(Math.hypot(e.input.aimX - s.x, e.input.aimY - s.y), w.range);
-  for (let d = far; d >= 26; d -= 10) {
-    let x0 = Math.round(s.x + c * d - ww / 2), y0 = Math.round(s.y + sn * d - hh / 2), ok = false;
-    for (const lift of [0, 6, 12, 18, 24, 30, 38]) if (wallFits(x0, y0 - lift, ww, hh)) { y0 -= lift; ok = true; break; } // a standing wall rests on the ground instead of sinking into it
-    if (!ok) continue;
-    const cells = [];
-    for (let y = y0; y < y0 + hh; y++) for (let x = x0; x < x0 + ww; x++) { const i = y * W + x; if (!mask[i]) { mask[i] = CONC; cells.push(i); } }
-    walls.push({ x: x0, y: y0, w: ww, h: hh, hp: 450, life: 1500, cells, owner: e, hitT: 0 });
-    wallFx(x0 + ww / 2, y0 + hh / 2, ww, hh); emit({ t: 'wall', x: x0 + ww / 2, y: y0 + hh / 2, w: ww, h: hh });
-    return true;
+function wallPlan(e, w) {
+  const s = shoulder(e), c = Math.cos(e.aim), sn = Math.sin(e.aim), far = Math.min(Math.hypot(e.input.aimX - s.x, e.input.aimY - s.y), w.range), ang = e.wallAng || 0;
+  for (let d = far; d >= 26; d -= 12) for (const lift of [0, 8, 16, 26, 38]) {
+    const cx = s.x + c * d, cy = s.y + sn * d - lift;
+    if (wallFits(cx, cy, ang)) return { cx, cy, ang, ok: true };
   }
-  return false;
+  return { cx: s.x + c * far, cy: s.y + sn * far, ang, ok: false };
+}
+function buildWall(e, w) {
+  const P = wallPlan(e, w); if (!P.ok) return false;
+  const c = Math.cos(P.ang), sn = Math.sin(P.ang), cells = [], R = Math.ceil(Math.hypot(WALL_L, WALL_T) / 2) + 1;
+  for (let y = Math.floor(P.cy) - R; y <= P.cy + R; y++) for (let x = Math.floor(P.cx) - R; x <= P.cx + R; x++) {
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const du = (x + .5 - P.cx) * c + (y + .5 - P.cy) * sn, dv = -(x + .5 - P.cx) * sn + (y + .5 - P.cy) * c;
+    if (Math.abs(du) <= WALL_L / 2 && Math.abs(dv) <= WALL_T / 2) { const i = y * W + x; if (!mask[i]) { mask[i] = CONC; cells.push(i); } }
+  }
+  walls.push({ cx: P.cx, cy: P.cy, ang: P.ang, hp: 450, life: 1500, cells, owner: e, hitT: 0 });
+  wallFx(P.cx, P.cy, WALL_L, WALL_T); emit({ t: 'wall', x: P.cx, y: P.cy, w: WALL_L, h: WALL_T });
+  return true;
 }
 function wallFx(x, y, ww, hh) {
-  for (let i = 0; i < 14; i++) particles.push({ t: 'spark', x: x + rnd(-ww / 2, ww / 2), y: y + rnd(-hh / 2, hh / 2), vx: rnd(-2, 2), vy: rnd(-2, 1), life: rnd(10, 22), max: 22, s: 1 });
+  for (let i = 0; i < 14; i++) particles.push({ t: 'spark', x: x + rnd(-ww / 2, ww / 2) * .6, y: y + rnd(-ww / 2, ww / 2) * .6, vx: rnd(-2, 2), vy: rnd(-2, 1), life: rnd(10, 22), max: 22, s: 1 });
   noise(.18, 900, volAt(x, y) * .6, 'lowpass'); blip(300, 120, .15, .25, 'square', x, y);
 }
-function wallAt(x, y) { for (const q of walls) if (x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h) return q; return null; }
+function wallAt(x, y) {
+  for (const q of walls) { const c = Math.cos(q.ang), sn = Math.sin(q.ang), du = (x - q.cx) * c + (y - q.cy) * sn, dv = -(x - q.cx) * sn + (y - q.cy) * c; if (Math.abs(du) <= WALL_L / 2 + .5 && Math.abs(dv) <= WALL_T / 2 + .5) return q; }
+  return null;
+}
 function hurtWall(q, dmg) { q.hp -= dmg; q.hitT = 6; if (q.hp <= 0) removeWall(q, true); }
 function removeWall(q, broken) {
   const i = walls.indexOf(q); if (i < 0) return; walls.splice(i, 1);
-  for (const c of q.cells) if (mask[c] === CONC) mask[c] = 0;
-  if (broken) wallFx(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h);
+  for (const c of q.cells || []) if (mask[c] === CONC) mask[c] = 0;
+  if (broken) wallFx(q.cx, q.cy, WALL_L, WALL_T);
 }
 function updateWalls() { for (let i = walls.length - 1; i >= 0; i--) { const q = walls[i]; if (q.hitT > 0) q.hitT--; if (--q.life <= 0) removeWall(q, false); } }
+function wallPath(c) { c.beginPath(); c.rect(-WALL_L / 2, -WALL_T / 2, WALL_L, WALL_T); }
 function drawWalls() {
   for (const q of walls) {
+    ctx.save(); ctx.translate(q.cx, q.cy); ctx.rotate(q.ang);
     ctx.globalAlpha = q.life < 180 && (q.life >> 3) % 2 ? .45 : 1;
-    const g = ctx.createLinearGradient(q.x, q.y, q.x + q.w, q.y + q.h); g.addColorStop(0, '#9aa6bb'); g.addColorStop(.5, '#5f6c82'); g.addColorStop(1, '#394357');
-    ctx.fillStyle = g; ctx.fillRect(q.x, q.y, q.w, q.h);
-    ctx.strokeStyle = '#1b212e'; ctx.lineWidth = 1.5; ctx.strokeRect(q.x + .75, q.y + .75, q.w - 1.5, q.h - 1.5);
-    ctx.fillStyle = 'rgba(225,238,255,.6)';
-    for (let a = 4; a < q.w; a += 16) for (let b = 4; b < q.h; b += 16) ctx.fillRect(q.x + a, q.y + b, 1.6, 1.6);
+    const g = ctx.createLinearGradient(-WALL_L / 2, -WALL_T / 2, WALL_L / 2, WALL_T / 2); g.addColorStop(0, '#9aa6bb'); g.addColorStop(.5, '#5f6c82'); g.addColorStop(1, '#394357');
+    ctx.fillStyle = g; wallPath(ctx); ctx.fill(); ctx.strokeStyle = '#1b212e'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(225,238,255,.6)'; for (let a = -WALL_L / 2 + 5; a < WALL_L / 2; a += 16) { ctx.fillRect(a, -3, 1.6, 1.6); ctx.fillRect(a, 2, 1.6, 1.6); }
     const dmg = 1 - q.hp / 450; ctx.strokeStyle = 'rgba(10,12,20,.7)'; ctx.lineWidth = .8;
-    for (let k = 0; k < dmg * 7; k++) { const cx = q.x + ((k * 37) % q.w), cy = q.y + ((k * 53) % q.h); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + ((k * 7) % 9) - 4, cy + ((k * 11) % 9) - 4); ctx.stroke(); }
-    if (q.hitT > 0) { ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(q.x, q.y, q.w, q.h); }
-    ctx.globalAlpha = 1;
+    for (let k = 0; k < dmg * 7; k++) { const cx = -WALL_L / 2 + ((k * 37) % WALL_L), cy = -WALL_T / 2 + ((k * 53) % WALL_T); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + ((k * 7) % 9) - 4, cy + ((k * 11) % 5) - 2); ctx.stroke(); }
+    if (q.hitT > 0) { ctx.fillStyle = 'rgba(255,255,255,.35)'; wallPath(ctx); ctx.fill(); }
+    ctx.restore();
   }
+}
+// translucent preview of the wall the builder would drop right now: green if it fits, red if not
+function drawWallGhost() {
+  const e = player, w = WEAPONS[e.wi];
+  if (e.dead || w.kind !== 'builder' || e.ammo[e.wi] <= 0) return;
+  const P = wallPlan(e, w), pulse = .5 + .5 * Math.sin(tick * .2);
+  ctx.save(); ctx.translate(P.cx, P.cy); ctx.rotate(P.ang);
+  ctx.fillStyle = P.ok ? `rgba(120,255,170,${.22 + .12 * pulse})` : `rgba(255,90,90,${.22 + .1 * pulse})`; wallPath(ctx); ctx.fill();
+  ctx.strokeStyle = P.ok ? 'rgba(160,255,200,.9)' : 'rgba(255,130,130,.9)'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
 }
 
 // --- flamethrower: a short, wide jet of fire; whoever it touches catches fire and keeps burning
@@ -1866,7 +1888,7 @@ function impactFx(x, y, vx, vy) {
 function explode(x, y, r, mult, src, wname) {
   boomFx(x, y, r); emit({ t: 'boom', x, y, r });
   for (const k of CRATES) if (k.alive) { const d = Math.hypot(k.x - x, k.y - 12 - y); if (d < r) damageCrate(k, mult / (d + 1)); }
-  for (const q of walls.slice()) { const d = Math.hypot(q.x + q.w / 2 - x, q.y + q.h / 2 - y); if (d < r + Math.max(q.w, q.h) / 2) hurtWall(q, mult / (d + 1) * 3); }
+  for (const q of walls.slice()) { const d = Math.hypot(q.cx - x, q.cy - y); if (d < r + WALL_L / 2) hurtWall(q, mult / (d + 1) * 3); }
   for (const c of ICICLES) if (c.state === 0 && Math.hypot(c.x - x, c.y + c.len / 2 - y) < r * 1.3) { c.state = 1; c.vy = 0; c.by = src; }
   for (const t of soldiers) {
     if (t.dead) continue;
@@ -2062,7 +2084,7 @@ function playerInput() {
   inp.jet = mouse.right || !!keys.Space; inp.jetPressed = !!(pressed.jet || pressed.Space); inp.fire = mouse.left; inp.firePressed = !!pressed.fire;
   inp.jumpPressed = !!pressed.KeyW; inp.pronePressed = !!(pressed.KeyX || pressed.KeyC);
   inp.reload = !!keys.KeyR; inp.grenadePressed = !!pressed.KeyE; inp.grenadeHeld = !!keys.KeyE;
-  inp.jumpHeld = !!keys.KeyW; inp.knifePressed = !!pressed.KeyF; inp.potionPressed = !!pressed.KeyV; inp.swapPressed = !!pressed.KeyQ; inp.flagPressed = !!pressed.KeyG;
+  inp.jumpHeld = !!keys.KeyW; inp.knifePressed = !!pressed.KeyF; inp.potionPressed = !!pressed.KeyV; inp.swapPressed = !!pressed.KeyQ; inp.flagPressed = !!pressed.KeyG; inp.wallRot = !!keys.KeyB;
   if (menuOpen) { inp.fire = false; inp.firePressed = false; }
   inp.aimX = cam.x - SW / 2 / Z + mouse.x / Z; inp.aimY = cam.y - SH / 2 / Z + mouse.y / Z;
   // recoil kick nudges aim upward a little
@@ -2372,7 +2394,12 @@ const DOVE_TARGET = 600, DOVE_TICK = 6, DOVE_SAFE = 600; // respawns land at lea
 const dove = { x: W / 2, y: 1000, vy: 0, carrier: null, over: 0, winner: '' };
 function announce(text) { bigMsg = { text, t: 150 }; emit({ t: 'msg', text }); }
 // starts below the bridge deck: the jetpack alone cannot climb up to it
-function doveHome() { dove.x = W / 2; dove.y = groundBelow(W / 2 | 0, 900) - 20; dove.vy = 0; dove.carrier = null; }
+function doveHome() {
+  const [hx, hy] = MAP.dove || [W / 2, 900]; // each map says where its middle is and from which height to look down for the floor
+  let y = groundBelow(hx | 0, hy) - 20;
+  for (let k = 0; k < 400 && (solid(hx, y) || solid(hx, y - 10) || solid(hx - 8, y) || solid(hx + 8, y)); k++) y--; // never inside rock
+  dove.x = hx; dove.y = y; dove.vy = 0; dove.carrier = null;
+}
 function resetDove() { for (const q of soldiers) q.dp = 0; dove.over = 0; dove.winner = ''; doveHome(); }
 function dropDove(t) { dove.carrier = null; dove.x = t.x; dove.y = t.y - 14; dove.vy = -2.8; announce(`${t.name} soltou a pomba!`); }
 function updateDove() {
@@ -2415,7 +2442,7 @@ function setTeam(e, t) { e.team = t; if (gameMode === 'ctf') { e.col = TEAM_COLO
 function balancedTeam() { const n = [0, 0]; for (const q of soldiers) n[q.team || 0]++; return n[0] <= n[1] ? 0 : 1; }
 function initFlags() {
   flags.length = 0;
-  MAP.flags.forEach(([fx, fy], t) => { const gy = groundBelow(fx | 0, fy | 0); flags.push({ x: fx, y: gy, vy: 0, home: { x: fx, y: gy }, carrier: null, dropT: 0, atHome: true }); });
+  MAP.flags.forEach(([fx, fy], t) => { let gy = groundBelow(fx | 0, fy | 0); for (let k = 0; k < 200 && solid(fx, gy - 2); k++) gy--; flags.push({ x: fx, y: gy, vy: 0, home: { x: fx, y: gy }, carrier: null, dropT: 0, atHome: true }); });
 }
 function ctfPlace(e) { const h = flags[e.team || 0].home, x = h.x + rnd(-40, 40); e.x = x; e.y = groundBelow(x | 0, h.y - 70) - 3; e.vx = e.vy = 0; e.tx = e.x; e.ty = e.y; }
 function resetCtf() {
@@ -2497,7 +2524,7 @@ function step() {
   for (const s of soldiers) { updateSoldier(s); groundFx(s); }
   updateBullets(); updateWalls(); updateMolotovs(); updateHoles(); updatePortals(); updateFires(); updateKnives(); updateBoomerangs(); updateLivingWorld(); updateDove(); updateCtf(); updateParticles();
   frameTail();
-  if (netMode === 'host') hostSend(); // every tick: halves the delay between what the host sees and what guests see
+  if (netMode === 'host' && tick % 2 === 0) hostSend();
 }
 function frameTail() {
   aimKick *= 0.85; if (hitMarker > 0) hitMarker--;
@@ -2557,6 +2584,14 @@ function drawSpace() {
   const mx = SW * .2 - cam.x * .05 * Z, my = SH * .24 - cam.y * .03 * Z, mr = SH * .04, mg = ctx.createRadialGradient(mx - mr * .4, my - mr * .4, 1, mx, my, mr);
   mg.addColorStop(0, '#e6e8f2'); mg.addColorStop(1, '#4a4f66'); ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mx, my, mr, 0, 7); ctx.fill();
 }
+// the painted layers end in a dark haze: continue it downwards (the last rows, stretched and blurred) so the bottom of the screen is still background
+function extendLayer(L, img) {
+  const EXT = 760, iw = img.naturalWidth, ih = img.naturalHeight, c = mkCanvas(iw, ih + EXT), g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  g.save(); g.filter = 'blur(10px)'; g.drawImage(img, 0, ih - 60, iw, 56, 0, ih - 4, iw, EXT + 4); g.restore();
+  const gd = g.createLinearGradient(0, ih, 0, ih + EXT); gd.addColorStop(0, 'rgba(10,2,2,0)'); gd.addColorStop(1, 'rgba(10,2,2,.85)'); g.fillStyle = gd; g.fillRect(0, ih, iw, EXT);
+  L.img = c;
+}
 function drawBackground() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   const sky = ctx.createLinearGradient(0, 0, 0, SH);
@@ -2575,6 +2610,7 @@ function drawBackground() {
   if (!VOLCANO && !ARENA) drawAurora();
   const layers = PAINTED.length && PAINTED.every(L => ready(IMG[L.key])) ? [BG[0], ...PAINTED] : BG;
   for (const L of layers) {
+    if (VOLCANO && L.key && !L.img && ready(IMG[L.key])) extendLayer(L, IMG[L.key]);
     const img = L.img || IMG[L.key], sc = L.s || 1;
     const tw = (img.naturalWidth || img.width) * sc * Z, th = (img.naturalHeight || img.height) * sc * Z;
     const y = SH / 2 + (L.A - cam.y) * L.f * Z - L.row * sc * Z;
@@ -2585,20 +2621,7 @@ function drawBackground() {
       else ctx.drawImage(img, x, y, tw + 1, th);
     }
     if (L.bottom && y + th < SH) {
-      if (VOLCANO && L.key) {
-        // below the painted layer: a dark cave wall (the basalt texture, sunk into shadow, with a faint lava glow from below)
-        const ext = SH - (y + th) + 1, top = y + th - 1;
-        ctx.fillStyle = L.bottom; ctx.fillRect(0, top, SW, ext);
-        if (L.key === 'bg-mid' && ready(IMG.rock)) {
-          ctx.save(); ctx.beginPath(); ctx.rect(0, top, SW, ext); ctx.clip();
-          const pat = ctx.createPattern(IMG.rock, 'repeat'), k = Z * 376 / IMG.rock.naturalWidth;
-          pat.setTransform(new DOMMatrix([k, 0, 0, k, -cam.x * L.f * Z, top - cam.y * L.f * Z * .5]));
-          ctx.globalAlpha = .5; ctx.fillStyle = pat; ctx.fillRect(0, top, SW, ext); ctx.globalAlpha = 1;
-          const gdn = ctx.createLinearGradient(0, top, 0, top + ext); gdn.addColorStop(0, 'rgba(14,3,3,.55)'); gdn.addColorStop(1, 'rgba(8,2,2,.94)');
-          ctx.fillStyle = gdn; ctx.fillRect(0, top, SW, ext);
-          const gl = ctx.createLinearGradient(0, top, 0, SH); gl.addColorStop(0, 'rgba(255,90,20,.16)'); gl.addColorStop(1, 'rgba(255,90,20,0)');
-          ctx.fillStyle = gl; ctx.fillRect(0, top, SW, ext); ctx.restore();
-        }
+      if (false) {
       } else { ctx.fillStyle = L.bottom; ctx.fillRect(0, y + th - 1, SW, SH - y - th + 1); }
     }
     if (L.key === 'bg-mid' && !VOLCANO && !ARENA) drawFog(y + L.row * sc * Z);
@@ -2633,6 +2656,7 @@ function drawWorld() {
   drawPortals();
   drawMolotovs();
   drawWalls();
+  drawWallGhost();
   for (const s of soldiers) if (s.dead) drawSoldier(s);
   for (const s of soldiers) if (!s.dead) drawSoldier(s);
   drawDove();
@@ -3156,6 +3180,7 @@ function drawHUD() {
   for (let q = 0; q < 4; q++) { const a = q * Math.PI / 2; ctx.beginPath(); ctx.arc(mx, my, cr, a - 0.5, a + 0.5); ctx.stroke(); }
   ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(mx - 1, my - 1, 2, 2);
   if (p.reloadT > 0) { ctx.strokeStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(mx, my, gap + 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - p.reloadT / w.reload)); ctx.stroke(); }
+  if (w.kind === 'builder') { ctx.textAlign = 'center'; ctx.font = F(20, 600); ctx.fillStyle = 'rgba(190,230,255,.9)'; ctx.fillText('B (segurar): girar o muro', SW / 2, Y(1000)); }
   if (w.kind === 'boomerang' && p.chargeT > 0) { ctx.strokeStyle = '#8fe6ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(mx, my, gap + 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.chargeT / 60); ctx.stroke(); }
 }
 
@@ -3195,12 +3220,15 @@ function applyRock() {
   ROCK_LAYERS = null; rockApplied = true;
 }
 function applyPlanks() {
-  const img = IMG['wood-planks'], g = worldCanvas.getContext('2d');
-  const P = MAP.planks, sy = 515, sh = 724 - 515, h = P.h + 2, tw = img.naturalWidth * h / sh;
-  g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip(); // the world context keeps its WS scale, so this is in world units
-  for (let x = P.x; x < P.x + P.w; x += tw) g.drawImage(img, 0, sy, img.naturalWidth, sh, x, P.y - 1, tw, h);
-  g.fillStyle = VOLCANO ? 'rgba(110,100,96,.9)' : 'rgba(230,238,250,.95)'; g.fillRect(P.x, P.y, P.w, 2);
-  g.restore(); planksApplied = true;
+  const img = IMG['wood-planks'], g = worldCanvas.getContext('2d'), sy = 515, sh = 724 - 515;
+  for (const P of [].concat(MAP.planks)) {
+    const h = P.h + 2, tw = img.naturalWidth * h / sh;
+    g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip(); // the world context keeps its WS scale, so this is in world units
+    for (let x = P.x; x < P.x + P.w; x += tw) g.drawImage(img, 0, sy, img.naturalWidth, sh, x, P.y - 1, tw, h);
+    g.fillStyle = VOLCANO ? 'rgba(110,100,96,.9)' : 'rgba(230,238,250,.95)'; g.fillRect(P.x, P.y, P.w, 2);
+    g.restore();
+  }
+  planksApplied = true;
 }
 function render() {
   if (!worldCanvas) { drawBackground(); return; }
@@ -3280,6 +3308,8 @@ document.querySelectorAll('#modes button').forEach(b => {
   };
 });
 showCtfOpts();
+$('hq').checked = HQ;
+$('hq').onchange = () => { saveProfile(); try { localStorage.setItem('sr-q', $('hq').checked ? 'alta' : 'normal'); } catch (err) { /* ignore */ } location.reload(); };
 function applyMode() {
   gameMode = selMode;
   if (gameMode === 'dove') resetDove();
@@ -3352,7 +3382,7 @@ function onHostData(conn, m) {
     for (const k of ['jumpPressed', 'pronePressed', 'firePressed', 'grenadePressed', 'crouchPressed', 'knifePressed', 'jetPressed', 'swapPressed', 'potionPressed', 'flagPressed']) if (i[k]) a[k] = true;
     if (Number.isInteger(i.switchTo) && i.switchTo >= 0 && i.switchTo < WEAPONS.length) a.switchTo = i.switchTo;
     if (Number.isInteger(i.setSec) && i.setSec >= 0 && i.setSec < WEAPONS.length) a.setSec = i.setSec;
-    g.netIn = { left: !!i.left, right: !!i.right, crouch: !!i.crouch, jet: !!i.jet, fire: !!i.fire, reload: !!i.reload, grenadeHeld: !!i.grenadeHeld, jumpHeld: !!i.jumpHeld, aimX: +i.aimX || 0, aimY: +i.aimY || 0 };
+    g.netIn = { wallRot: !!i.wallRot, left: !!i.left, right: !!i.right, crouch: !!i.crouch, jet: !!i.jet, fire: !!i.fire, reload: !!i.reload, grenadeHeld: !!i.grenadeHeld, jumpHeld: !!i.jumpHeld, aimX: +i.aimX || 0, aimY: +i.aimY || 0 };
   }
 }
 function dropGuest(conn) {
@@ -3367,11 +3397,12 @@ function packSoldier(e) {
     flipT: e.flipT, jumpDir: e.jumpDir, jumpT: e.jumpT, onGround: e.onGround, jetting: e.jetting, anim: r2(e.anim), protect: e.protect,
     kills: e.kills, deaths: e.deaths, grenades: e.grenades, gCharge: e.gCharge, startT: e.startT,
     hasKnife: e.hasKnife, hasBoom: e.hasBoom, throwT: e.throwT, armor: r2(e.armor), reloadStart: e.reloadStart, flipDir: e.flipDir,
-    team: e.team, sec: e.sec, chargeT: e.chargeT, gravT: e.gravT, freezeT: e.freezeT, chill: Math.round(e.chill), burnT: e.burnT, buff: e.buff, buffT: e.buffT, potions: e.potions, dp: e.dp, flipLen: e.flipLen,
+    team: e.team, wallAng: r2(e.wallAng), sec: e.sec, chargeT: e.chargeT, gravT: e.gravT, freezeT: e.freezeT, chill: Math.round(e.chill), burnT: e.burnT, buff: e.buff, buffT: e.buffT, potions: e.potions, dp: e.dp, flipLen: e.flipLen,
     rag: e.dead && e.rag ? e.rag.flatMap(q => [r2(q.x), r2(q.y)]) : null };
 }
 function hostSend() {
   if (!conns.length) { netEvents.length = 0; return; }
+  if (conns.some(c => c.dataChannel && c.dataChannel.bufferedAmount > 24000)) return; // a guest is behind: skip this snapshot instead of piling more on (events wait for the next one)
   const msg = { t: 's', s: soldiers.map(packSoldier),
     b: bullets.map(b => [r2(b.x), r2(b.y), r2(b.vx), r2(b.vy), r2(b.sx), r2(b.sy), WEAPONS.indexOf(b.w)]),
     g: grenades.map(g => [r2(g.x), r2(g.y), r2(g.r)]),
@@ -3381,7 +3412,7 @@ function hostSend() {
     kn: knives.map(q => [r2(q.x), r2(q.y), r2(q.r), q.fly ? 1 : 0]),
     bm: boomerangs.map(q => [r2(q.x), r2(q.y), r2(q.r), q.fly ? 1 : 0]),
     hl: holes.map(h => [r2(h.x), r2(h.y), h.life]),
-    wl: walls.map(q => [q.x, q.y, q.w, q.h, Math.round(q.hp), q.life]),
+    wl: walls.map(q => [r2(q.cx), r2(q.cy), r2(q.ang), Math.round(q.hp), q.life]),
     fz: fires.map(f => [r2(f.x), r2(f.y), f.w, f.life]),
     mo: molotovs.map(m => [r2(m.x), r2(m.y), r2(m.r)]),
     po: portals.map(q => [r2(q.x), r2(q.y), r2(q.nx), r2(q.ny), q.owner.id, q.idx]),
@@ -3468,7 +3499,7 @@ function applySnapshot(m) {
     (m.fl || []).forEach((q, i) => { const f = flags[i]; if (!f) return; f.x = q[0]; f.y = q[1]; f.carrier = q[2] ? soldiers.find(z => z.id === q[2]) || null : null; f.atHome = !!q[3]; });
     CTF.score = m.cs || [0, 0]; CTF.target = m.ct || 3; CTF.over = m.co || 0;
   }
-  walls.length = 0; for (const q of m.wl || []) walls.push({ x: q[0], y: q[1], w: q[2], h: q[3], hp: q[4], life: q[5], hitT: 0 });
+  walls.length = 0; for (const q of m.wl || []) walls.push({ cx: q[0], cy: q[1], ang: q[2], hp: q[3], life: q[4], hitT: 0 });
   holes.length = 0; for (const q of m.hl || []) holes.push({ x: q[0], y: q[1], life: q[2] });
   fires.length = 0; for (const q of m.fz || []) fires.push({ x: q[0], y: q[1], w: q[2], life: q[3] });
   molotovs.length = 0; for (const q of m.mo || []) molotovs.push({ x: q[0], y: q[1], r: q[2], vx: 0, vy: 0 });
