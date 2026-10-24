@@ -1693,6 +1693,12 @@ function respawn(e) {
   e.freezeT = 0; e.chill = 0; e.burnT = 0; e.buff = ''; e.buffT = 0; e.chargeT = 0; e.gravT = 0; e.flingT = 0; e.pullT = 0; e.potions = 2; e.flipLen = 24;
   if (e.isBot) e.wi = BOT_WEAPONS[Math.random() * BOT_WEAPONS.length | 0];
   if (gameMode === 'ctf' && flags.length) { ctfPlace(e); e.pitDeath = false; }
+  else if (gameMode === 'dove') {
+    // never come back next to the dove (it drops where its carrier died): pick a spawn at least DOVE_SAFE away from it, else the farthest one
+    const spots = MAP.spawns.map((_, i) => spawnXY(i)), far = spots.filter(q => Math.hypot(q[0] - dove.x, q[1] - dove.y) >= DOVE_SAFE);
+    const sp = far.length ? far[Math.random() * far.length | 0] : spots.reduce((a, q) => Math.hypot(q[0] - dove.x, q[1] - dove.y) > Math.hypot(a[0] - dove.x, a[1] - dove.y) ? q : a);
+    e.x = sp[0]; e.y = sp[1]; e.vx = e.vy = 0; e.pitDeath = false;
+  }
   else if (e.pitDeath || lavaAt(e.x, e.y) || lavaAt(e.x, e.y - 4)) { const sp = spawnXY(Math.random() * MAP.spawns.length | 0); e.x = sp[0]; e.y = sp[1]; e.pitDeath = false; e.vx = e.vy = 0; }
   unstick(e);
 }
@@ -2197,7 +2203,7 @@ function drawFog(yw) {
 // One golden dove sits in the middle of the map: whoever touches it carries it and scores 1 point every 0.1 s.
 // Dying drops it where you fell, and anyone who touches it takes it. First to DOVE_TARGET wins the round.
 let gameMode = 'dm'; // 'dm' | 'dove'
-const DOVE_TARGET = 600, DOVE_TICK = 6;
+const DOVE_TARGET = 600, DOVE_TICK = 6, DOVE_SAFE = 600; // respawns land at least DOVE_SAFE units from the dove
 const dove = { x: W / 2, y: 1000, vy: 0, carrier: null, over: 0, winner: '' };
 function announce(text) { bigMsg = { text, t: 150 }; emit({ t: 'msg', text }); }
 // starts below the bridge deck: the jetpack alone cannot climb up to it
