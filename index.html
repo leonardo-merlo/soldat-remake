@@ -48,7 +48,7 @@
   <label for="nick">Nome</label>
   <input id="nick" maxlength="12" autocomplete="off">
   <div id="colors"></div>
-  <div id="map-pick"><label>Mapa</label><div id="maps"><button data-map="inverno">INVERNO</button><button data-map="vulcao">VULCÃO</button><button data-map="selva">SELVA</button><button data-map="ruinas">RUÍNAS</button></div></div>
+  <div id="map-pick"><label>Mapa</label><div id="maps"><button data-map="inverno">INVERNO</button><button data-map="vulcao">VULCÃO</button><button data-map="selva">SELVA</button><button data-map="espaco">ESPAÇO</button></div></div>
   <div id="mode-pick"><label>Modo</label><div id="modes"><button data-mode="dm">DEATHMATCH</button><button data-mode="dove">POMBA DE OURO</button><button data-mode="ctf">BANDEIRA</button></div>
     <div id="ctf-opts" hidden><label for="ctf-target">Capturas para vencer</label><input id="ctf-target" type="number" min="1" max="10" value="3"></div></div>
   <button id="join" hidden>ENTRAR NA SALA</button>
@@ -127,18 +127,19 @@ function makeNoise(size, seed) {
 // Four maps share the engine: 'inverno' (snow, icicles, aurora) and 'vulcao' (basalt, falling rocks, lava pools) are the big
 // ground maps; 'selva' (small, closed cave) and 'ruinas' (medium, water below kills) are centred arenas of floating platforms.
 // The host's invite link carries ?mapa=, so guests build the same world.
-const MAP_IDS = ['inverno', 'vulcao', 'selva', 'ruinas'];
+const MAP_IDS = ['inverno', 'vulcao', 'selva', 'espaco'];
 const MAP_ID = (() => {
-  const q = new URLSearchParams(location.search).get('mapa');
+  const alias = v => v === 'ruinas' ? 'espaco' : v; // the old Ruínas arena became the space map
+  const q = alias(new URLSearchParams(location.search).get('mapa'));
   if (MAP_IDS.includes(q)) return q;
-  try { const m = localStorage.getItem('sr-map'); return MAP_IDS.includes(m) ? m : 'inverno'; } catch (err) { return 'inverno'; }
+  try { const m = alias(localStorage.getItem('sr-map')); return MAP_IDS.includes(m) ? m : 'inverno'; } catch (err) { return 'inverno'; }
 })();
 const VOLCANO = MAP_ID === 'vulcao';
-const ARENA = MAP_ID === 'selva' || MAP_ID === 'ruinas';
-const [W, H] = { inverno: [3200, 1500], vulcao: [3200, 1500], selva: [1900, 1000], ruinas: [2600, 1150] }[MAP_ID];
+const ARENA = MAP_ID === 'selva' || MAP_ID === 'espaco';
+const [W, H] = { inverno: [3200, 1500], vulcao: [3200, 1500], selva: [1900, 1000], espaco: [2600, 1150] }[MAP_ID];
 // arena look: sky colours, rock base + amplitude (r, g, b, dr, dg, db), colour of the top crust, cloud tint
 const THEME = {
-  ruinas: { sky: ['#3c8fd0', '#8dc9ee', '#f3dfb6'], rock: [150, 92, 60, 64, 52, 38], top: [228, 192, 122], cloud: '255,255,255,.5', vig: 'rgba(40,20,5,.35)' },
+  espaco: { sky: ['#03010a', '#0e0828', '#241250'], rock: [50, 60, 86, 36, 42, 50], top: [100, 205, 240], cloud: '170,120,255,.08', vig: 'rgba(0,0,12,.55)' },
   selva: { sky: ['#0f3d2a', '#2b8556', '#c0e6a0'], rock: [40, 54, 34, 52, 58, 38], top: [92, 150, 58], cloud: '190,255,200,.16', vig: 'rgba(0,18,6,.5)' },
 }[MAP_ID];
 const ROCK = 1, WOOD = 2, CONC = 3;
@@ -174,10 +175,10 @@ const MAP = MAP_ID === 'selva' ? {
   crates: [[400, 250], [1500, 250], [950, 300], [950, 620], [560, 440], [1340, 440], [240, 780], [1660, 780]],
   lanterns: [], planks: null, lava: [], pit: 0,
   flags: [[255, 400], [1645, 400]], waterfall: { x: 950, y0: 345, y1: 925, w: 44 },
-} : MAP_ID === 'ruinas' ? {
+} : MAP_ID === 'espaco' ? {
   spawns: [[330, 500], [2270, 500], [690, 860], [1910, 860], [1300, 420]],
   crates: [[400, 480], [2200, 480], [1300, 420], [700, 840], [1900, 840], [1300, 760], [700, 260], [1900, 260]],
-  lanterns: [], planks: null, lava: [], pit: 1030, pitName: 'Água',
+  lanterns: [], planks: null, lava: [], pit: 1030, pitName: 'Vazio', pitMsg: 'Você caiu no vazio',
   flags: [[330, 500], [2270, 500]],
 } : VOLCANO ? {
   spawns: [640, 2950, 2200, 1000, 2450],
@@ -205,8 +206,8 @@ if (MAP_ID === 'selva') {
   symm(ROCK, [[780, 470], [850, 455], [900, 480], [870, 505], [800, 505]]);
   symm(WOOD, rect(180, 430, 140, 12));
   POLYS.push({ m: WOOD, p: rect(830, 330, 240, 12) }, { m: WOOD, p: rect(850, 640, 200, 12) }, { m: WOOD, p: rect(700, 160, 500, 12) });
-} else if (MAP_ID === 'ruinas') {
-  // desert ruins over water: a long beam across the top, two big side pillars with ledges, a central pillar with decks
+} else if (MAP_ID === 'espaco') {
+  // space station over the void: a long beam across the top, two big side pillars with ledges, an open middle with two small decks
   POLYS.push({ m: ROCK, p: [[150, 150], [1300, 165], [2450, 150], [2450, 195], [1300, 210], [150, 195]] });
   symm(ROCK, [[0, 120], [190, 110], [240, 180], [230, 330], [190, 520], [200, 700], [270, 860], [340, 960], [420, 1030], [430, H], [0, H]]);
   symm(ROCK, [[230, 560], [420, 520], [520, 560], [470, 600], [250, 620]]);
@@ -339,11 +340,12 @@ function buildWorld() {
         r = 104 + 46 * gr; g = 70 + 30 * gr; b = 46 + 18 * gr;
         if (x % 32 < 2 || db < 2) { r *= 0.55; g *= 0.55; b *= 0.55; }
         if (dt < 3) { if (VOLCANO) { r = 112; g = 102; b = 98; } else if (ARENA) { r = 190; g = 160; b = 110; } else { r = 225; g = 234; b = 248; } }
+        if (MAP_ID === 'espaco') { r = 62 + 40 * gr; g = 76 + 42 * gr; b = 108 + 46 * gr; if (x % 32 < 2 || db < 2) { r *= .6; g *= .6; b *= .66; } if (dt < 3) { r = 120; g = 230; b = 255; } }
       } else {
         const v = 128 + 52 * n - 30 * (s2 > 0.7 ? s2 - 0.7 : 0) * 4;
         r = v; g = v + 3; b = v + 12;
         if (VOLCANO) { r = v * .72; g = v * .66; b = v * .64; }
-        else if (ARENA) { r = v * 1.05; g = v * .9; b = v * .75; }
+        else if (ARENA) { r = v * .62; g = v * .72; b = v * .95; if (dt < 4) { r = 120; g = 220; b = 255; } }
         if (db < 3 || x % 48 < 1) { r *= 0.6; g *= 0.6; b *= 0.6; }
         if (dt < 4) { if (VOLCANO) { r = 108; g = 100; b = 96; } else { r = 222; g = 232; b = 248; } }
       }
@@ -455,11 +457,10 @@ function decorateArena(w, tc, surf, rng, placeProp) {
       }
     }
   } else {
-    // wooden posts holding the decks and rope rails
-    w.fillStyle = '#5a3d26';
+    // metal struts holding the decks
+    w.fillStyle = '#3a4a68';
     for (const px of [1210, 1390]) w.fillRect(px - 3, 456, 6, 324);
     for (const px of [610, 770, 1830, 1990]) w.fillRect(px - 4, 898, 8, 150);
-    w.strokeStyle = 'rgba(70,48,30,.9)'; w.lineWidth = 2;
   }
   w.drawImage(tc, 0, 0);
   if (jungle) {
@@ -475,33 +476,23 @@ function decorateArena(w, tc, surf, rng, placeProp) {
     // waterfall base, painted static; the moving streaks are drawn every frame
     const F = MAP.waterfall; w.fillStyle = 'rgba(120,200,230,.5)'; w.fillRect(F.x - F.w / 2, F.y0, F.w, F.y1 - F.y0);
   } else {
-    // sandstone cracks and a few blocks lying on the ledges
-    w.strokeStyle = 'rgba(60,30,15,.35)'; w.lineWidth = 1;
-    for (let k = 0; k < 160; k++) { const x = rng() * W, y = rng() * H; if (!mask[(y | 0) * W + (x | 0)] || mask[(y | 0) * W + (x | 0)] !== ROCK) continue; w.beginPath(); w.moveTo(x, y); w.lineTo(x + (rng() - .5) * 30, y + (rng() - .2) * 24); w.stroke(); }
-    for (const [bx, by] of [[520, 538], [2080, 538]]) { placeProp('sandbags', bx, 18, rng() < .5, by - 30); }
-    placeProp('barrel', 470, 22, false, 500); placeProp('barrel', 2130, 22, false, 500);
+    // panel seams, rivets and glowing edge lights along every platform top
+    w.strokeStyle = 'rgba(10,16,32,.5)'; w.lineWidth = 1;
+    for (let k = 0; k < 220; k++) { const x = rng() * W, y = rng() * H, m = mask[(y | 0) * W + (x | 0)]; if (m !== ROCK) continue; w.beginPath(); w.moveTo(x, y); w.lineTo(x + (rng() < .5 ? 0 : (rng() - .5) * 40), y + (rng() < .5 ? 0 : (rng() - .5) * 30)); w.stroke(); }
+    w.fillStyle = 'rgba(160,235,255,.85)';
+    for (let x = 6; x < W - 6; x += 22) {
+      const y = surf[x]; if (!mask[y * W + x] || y > MAP.pit - 40) continue;
+      w.fillRect(x, y + 1, 2, 2);
+      if (x % 66 < 22) LIGHTS.push({ x, y: y - 3, r: 46, c: '90,215,255', a: .22 });
+    }
+    placeProp('barrel', 470, 22, false, 500); placeProp('barrel', 2130, 22, false, 500); placeProp('sandbags', 520, 18, false, 500); placeProp('sandbags', 2080, 18, true, 500);
   }
   if (jungle) for (let x = 90; x < W; x += 210) LIGHTS.push({ x, y: 300 + (x % 3) * 220, r: 110, c: '150,255,160', a: .16 });
 }
 function buildArenaBackground(rng) {
+  if (MAP_ID === 'espaco') { BG.length = 0; return; } // the space backdrop is drawn every frame by drawSpace()
   const jungle = MAP_ID === 'selva';
-  if (!jungle) {
-    // far pale mesas and dunes
-    { const h = 420, c = mkCanvas(2048, h), g = c.getContext('2d'), a = ridge(2048, 0.58, rng);
-      const gr = g.createLinearGradient(0, 120, 0, h); gr.addColorStop(0, '#dcc39a'); gr.addColorStop(1, '#c2a07a');
-      g.fillStyle = gr; g.beginPath(); g.moveTo(0, h);
-      for (let x = 0; x <= 2048; x += 2) { const mesa = Math.sin(x / 190) > .55 ? 60 : 0; g.lineTo(x, 160 + (1 - a[x]) * 140 - mesa); }
-      g.lineTo(2048, h); g.fill();
-      const hz = g.createLinearGradient(0, h * .4, 0, h); hz.addColorStop(0, 'rgba(240,225,190,0)'); hz.addColorStop(1, 'rgba(240,225,190,.6)'); g.fillStyle = hz; g.fillRect(0, 0, 2048, h);
-      BG.push({ img: c, f: 0.06, A: 900, row: h, bottom: '#c2a07a' }); }
-    // nearer orange mesas with small arches
-    { const h = 360, c = mkCanvas(2048, h), g = c.getContext('2d'), a = ridge(2048, 0.6, rng);
-      const gr = g.createLinearGradient(0, 80, 0, h); gr.addColorStop(0, '#b8774a'); gr.addColorStop(1, '#7c4a2e');
-      g.fillStyle = gr; g.beginPath(); g.moveTo(0, h);
-      for (let x = 0; x <= 2048; x += 2) g.lineTo(x, 120 + (1 - a[x]) * 150);
-      g.lineTo(2048, h); g.fill();
-      g.fillStyle = '#6a3e26'; for (const ax of [260, 820, 1430, 1900]) { g.beginPath(); g.moveTo(ax - 40, h - 60); g.lineTo(ax - 40, 170); g.quadraticCurveTo(ax, 120, ax + 40, 170); g.lineTo(ax + 40, h - 60); g.lineTo(ax + 22, h - 60); g.lineTo(ax + 22, 190); g.quadraticCurveTo(ax, 160, ax - 22, 190); g.lineTo(ax - 22, h - 60); g.fill(); }
-      BG.push({ img: c, f: 0.12, A: 1010, row: h, bottom: '#7c4a2e' }); }
+  if (false) {
   } else {
     // far canopy with light shafts
     { const h = 460, c = mkCanvas(2048, h), g = c.getContext('2d'), a = ridge(2048, 0.55, rng);
@@ -1665,7 +1656,7 @@ function killFx(t, src, wname, hx, hy, dirx) {
   if (src === player && t !== player) {
     player.streak = tick - player.lastKillT < 180 ? player.streak + 1 : 1; player.lastKillT = tick;
     bigMsg = { text: player.streak === 2 ? 'DOUBLE KILL' : player.streak === 3 ? 'TRIPLE KILL' : player.streak > 3 ? 'MULTI KILL' : `Você matou ${t.name}`, t: 240 };
-  } else if (t === player) bigMsg = { text: src === t ? (wname === MAP.pitName ? 'Você caiu na água' : wname === 'Gelo' ? 'Esmagado pelo gelo' : wname === 'Rocha' ? 'Esmagado por uma rocha' : wname === 'Lava' ? 'Derreteu na lava' : 'Você se explodiu') : `Morto por ${src ? src.name : '?'}`, t: 240 };
+  } else if (t === player) bigMsg = { text: src === t ? (wname === MAP.pitName ? MAP.pitMsg : wname === 'Gelo' ? 'Esmagado pelo gelo' : wname === 'Rocha' ? 'Esmagado por uma rocha' : wname === 'Lava' ? 'Derreteu na lava' : 'Você se explodiu') : `Morto por ${src ? src.name : '?'}`, t: 240 };
 }
 
 // Verlet ragdoll: 11 points joined by sticks, colliding with the terrain mask (Soldat corpses are skeletons too)
@@ -2380,6 +2371,37 @@ function updateSnow() {
   }
 }
 
+// space backdrop: drifting nebulae, twinkling stars with parallax, a big ringed planet and a moon
+let SPACE = null;
+function drawSpace() {
+  if (!SPACE) {
+    const r = mulberry(5);
+    SPACE = { stars: Array.from({ length: 300 }, () => ({ x: r(), y: r(), s: .7 + r() * 1.9, f: .01 + r() * .05, ph: r() * 6, c: r() < .2 ? '170,200,255' : r() < .2 ? '255,210,170' : '255,255,255' })),
+      neb: Array.from({ length: 8 }, (_, i) => ({ x: r(), y: .1 + r() * .7, rad: .3 + r() * .35, c: ['120,60,255', '40,120,255', '255,60,160', '40,220,200'][i % 4], a: .1 + r() * .1, f: .02 + r() * .02 })) };
+  }
+  const t = performance.now() / 1000;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const n of SPACE.neb) {
+    const span = SW * 1.5, px = (((n.x * span - cam.x * n.f * Z) % span) + span) % span - SW * .25, py = n.y * SH - cam.y * n.f * Z * .3, R = n.rad * SH * 1.2;
+    const g = ctx.createRadialGradient(px, py, 0, px, py, R); g.addColorStop(0, `rgba(${n.c},${n.a})`); g.addColorStop(1, `rgba(${n.c},0)`); ctx.fillStyle = g; ctx.fillRect(px - R, py - R, R * 2, R * 2);
+  }
+  for (const st of SPACE.stars) {
+    const px = (((st.x * SW - cam.x * st.f * Z * 4) % SW) + SW) % SW, py = (((st.y * SH - cam.y * st.f * Z * 2) % SH) + SH) % SH, tw = .55 + .45 * Math.sin(t * (1 + st.f * 30) + st.ph);
+    ctx.fillStyle = `rgba(${st.c},${tw})`; ctx.fillRect(px, py, st.s, st.s);
+  }
+  ctx.restore();
+  const pxp = SW * .78 - cam.x * .03 * Z, pyp = SH * .3 - cam.y * .02 * Z, pr = SH * .17;
+  ctx.save(); ctx.translate(pxp, pyp); ctx.rotate(-.35);
+  ctx.strokeStyle = 'rgba(190,160,255,.3)'; ctx.lineWidth = pr * .13; ctx.beginPath(); ctx.ellipse(0, 0, pr * 1.8, pr * .45, 0, Math.PI, Math.PI * 2); ctx.stroke();
+  ctx.rotate(.35);
+  const pg = ctx.createRadialGradient(-pr * .4, -pr * .4, pr * .1, 0, 0, pr); pg.addColorStop(0, '#c4b4ff'); pg.addColorStop(.5, '#5d42c4'); pg.addColorStop(1, '#120938');
+  ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(0, 0, pr, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(140,110,230,.35)'; ctx.lineWidth = pr * .05; for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.ellipse(0, k * pr * .28, pr * Math.sqrt(1 - (k * .28) ** 2), pr * .08, 0, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.rotate(-.35); ctx.strokeStyle = 'rgba(225,205,255,.6)'; ctx.lineWidth = pr * .13; ctx.beginPath(); ctx.ellipse(0, 0, pr * 1.8, pr * .45, 0, 0, Math.PI); ctx.stroke();
+  ctx.restore();
+  const mx = SW * .2 - cam.x * .05 * Z, my = SH * .24 - cam.y * .03 * Z, mr = SH * .04, mg = ctx.createRadialGradient(mx - mr * .4, my - mr * .4, 1, mx, my, mr);
+  mg.addColorStop(0, '#e6e8f2'); mg.addColorStop(1, '#4a4f66'); ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mx, my, mr, 0, 7); ctx.fill();
+}
 function drawBackground() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   const sky = ctx.createLinearGradient(0, 0, 0, SH);
@@ -2391,8 +2413,10 @@ function drawBackground() {
   const SUNP = ARENA ? [W * .7, H * .3] : [2350, 1010], sunX = SW / 2 + (SUNP[0] - cam.x) * 0.04 * Z, sunY = SH / 2 + (SUNP[1] - cam.y) * 0.1 * Z;
   let g = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 260 * Z / 3);
   if (VOLCANO) { g.addColorStop(0, 'rgba(255,170,90,.55)'); g.addColorStop(.3, 'rgba(255,100,40,.25)'); g.addColorStop(1, 'rgba(255,80,30,0)'); }
+  else if (MAP_ID === 'espaco') { g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0)'); }
   else { g.addColorStop(0, 'rgba(255,240,200,1)'); g.addColorStop(.08, 'rgba(255,225,170,.95)'); g.addColorStop(.3, 'rgba(255,180,120,.35)'); g.addColorStop(1, 'rgba(255,160,120,0)'); }
   ctx.fillStyle = g; ctx.fillRect(0, 0, SW, SH);
+  if (MAP_ID === 'espaco') drawSpace();
   if (!VOLCANO && !ARENA) drawAurora();
   const layers = PAINTED.length && PAINTED.every(L => ready(IMG[L.key])) ? [BG[0], ...PAINTED] : BG;
   for (const L of layers) {
@@ -2405,7 +2429,20 @@ function drawBackground() {
       if (L.mirror && (idx + i) % 2) { ctx.save(); ctx.translate(x + tw, y); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, tw + 1, th); ctx.restore(); }
       else ctx.drawImage(img, x, y, tw + 1, th);
     }
-    if (L.bottom && y + th < SH) { ctx.fillStyle = L.bottom; ctx.fillRect(0, y + th - 1, SW, SH - y - th + 1); }
+    if (L.bottom && y + th < SH) {
+      if (VOLCANO && L.key) {
+        // below the painted layer: its own reflection, upside down and sinking into the dark, so the lower screen still shows the landscape
+        const ext = SH - (y + th) + 1;
+        ctx.fillStyle = L.bottom; ctx.fillRect(0, y + th - 1, SW, ext);
+        ctx.save(); ctx.beginPath(); ctx.rect(0, y + th - 1, SW, ext); ctx.clip();
+        for (let i = 0, x = idx * tw - scroll; x < SW; i++, x += tw) {
+          if (L.mirror && (idx + i) % 2) { ctx.save(); ctx.translate(x + tw, y + th * 2 - 1); ctx.scale(-1, -1); ctx.drawImage(img, 0, 0, tw + 1, th); ctx.restore(); }
+          else { ctx.save(); ctx.translate(x, y + th * 2 - 1); ctx.scale(1, -1); ctx.drawImage(img, 0, 0, tw + 1, th); ctx.restore(); }
+        }
+        const gdn = ctx.createLinearGradient(0, y + th - 1, 0, y + th * 1.7); gdn.addColorStop(0, 'rgba(14,3,3,.3)'); gdn.addColorStop(1, 'rgba(14,3,3,.94)');
+        ctx.fillStyle = gdn; ctx.fillRect(0, y + th - 1, SW, ext); ctx.restore();
+      } else { ctx.fillStyle = L.bottom; ctx.fillRect(0, y + th - 1, SW, SH - y - th + 1); }
+    }
     if (L.key === 'bg-mid' && !VOLCANO && !ARENA) drawFog(y + L.row * sc * Z);
     if (L.lake) {
       const wl = y + L.row * Z;
@@ -2515,15 +2552,15 @@ function drawWorld() {
 function drawPitAndFalls() {
   const t = performance.now() / 1000;
   if (MAP.pit) {
-    // water under the ruins: deadly below the line; it only has to look deep and cold
-    const y0 = MAP.pit - 18, g = ctx.createLinearGradient(0, y0, 0, H);
-    g.addColorStop(0, 'rgba(120,200,230,.88)'); g.addColorStop(.25, 'rgba(40,120,180,.94)'); g.addColorStop(1, 'rgba(8,40,90,.98)');
-    ctx.fillStyle = g; ctx.fillRect(0, y0, W, H - y0);
-    ctx.strokeStyle = 'rgba(235,250,255,.85)'; ctx.lineWidth = 1.6; ctx.beginPath();
-    for (let x = 0; x <= W; x += 6) { const y = y0 + Math.sin(x * .05 + t * 2) * 1.4 + Math.sin(x * .13 - t * 3) * .7; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    // the void under the station: deadly below the line, a violet glow rising out of the dark
+    const y0 = MAP.pit - 18, g = ctx.createLinearGradient(0, y0 - 90, 0, H);
+    g.addColorStop(0, 'rgba(110,60,255,0)'); g.addColorStop(.25, 'rgba(110,60,255,.5)'); g.addColorStop(.5, 'rgba(30,10,90,.95)'); g.addColorStop(1, 'rgba(1,0,8,1)');
+    ctx.fillStyle = g; ctx.fillRect(0, y0 - 90, W, H - y0 + 90);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(170,130,255,.7)'; ctx.lineWidth = 1.6; ctx.beginPath();
+    for (let x = 0; x <= W; x += 6) { const y = y0 + Math.sin(x * .04 + t * 1.6) * 2 + Math.sin(x * .11 - t * 2.4) * 1; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.stroke();
-    ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(200,235,255,.14)';
-    for (let i = 0; i < 40; i++) ctx.fillRect(((i * 197 + t * 9 * (1 + i % 3)) % W), y0 + 6 + (i * 37) % 90, 30 + (i * 13) % 50, 1.2);
+    for (let i = 0; i < 46; i++) { const x = (i * 211) % W, ph = (t * (14 + i % 5 * 6) + i * 37) % 120; ctx.fillStyle = `rgba(190,160,255,${.5 * (1 - ph / 120)})`; ctx.fillRect(x, y0 + 4 - ph * .6 + 40, 1.6, 6 + i % 4 * 3); }
     ctx.globalCompositeOperation = 'source-over';
   }
   const F = MAP.waterfall;
@@ -2978,7 +3015,7 @@ function render() {
   if (!planksApplied && worldCanvas && MAP.planks && ready(IMG['wood-planks'])) applyPlanks();
   if (!rockApplied && ROCK_LAYERS && ready(IMG.rock)) applyRock();
   drawBackground();
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = `rgba(0,0,0,${VOLCANO ? .08 : ARENA ? .24 : .2})`; ctx.fillRect(0, 0, SW, SH); // slightly darker backdrop so it does not blend with the players
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = `rgba(0,0,0,${VOLCANO ? .08 : MAP_ID === 'espaco' ? 0 : ARENA ? .2 : .2})`; ctx.fillRect(0, 0, SW, SH); // slightly darker backdrop so it does not blend with the players
   drawWorld();
   drawPost();
   drawHUD();
@@ -3198,7 +3235,7 @@ function joinRoom(code) {
 // fixed rooms: the first to click hosts the code, whoever clicks next joins it. A room is whatever map and mode are selected above,
 // and the code is derived from room + map + mode, so each combination is its own room that never clashes with another.
 const ROOMS = [{ label: 'SALA 1' }];
-const MAP_LABEL = { inverno: 'Inverno', vulcao: 'Vulcão', selva: 'Selva', ruinas: 'Ruínas' }, MODE_LABEL = { dm: 'Deathmatch', dove: 'Pomba de Ouro', ctf: 'Bandeira' };
+const MAP_LABEL = { inverno: 'Inverno', vulcao: 'Vulcão', selva: 'Selva', espaco: 'Espaço' }, MODE_LABEL = { dm: 'Deathmatch', dove: 'Pomba de Ouro', ctf: 'Bandeira' };
 // one code per room, whatever is selected: the first player creates it with their map and mode, whoever enters next adopts them (the host's map id travels in the snapshot)
 const roomCodeFor = i => 'SL' + 'ABCDEFGH'[i] + 'X';
 function refreshRooms() { ROOMS.forEach((r, i) => { r.btn.innerHTML = `${r.label}<br><small style="font-size:13px;font-weight:600">entra se já houver jogo; senão cria: ${MAP_LABEL[MAP_ID]} · ${MODE_LABEL[selMode]}</small>`; }); }
