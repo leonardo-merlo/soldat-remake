@@ -29,6 +29,8 @@
   #maps{display:flex;gap:8px;margin:10px 0 0}
   #overlay #maps button{flex:1;margin:0;padding:8px;font-size:18px;background:transparent;color:#ffd27a;border:2px solid rgba(255,210,122,.5)}
   #overlay #maps button.on{background:#ffd27a;color:#0b1020;border-color:#ffd27a}
+  #rooms{display:flex;gap:10px;margin:10px 0 0}
+  #overlay #rooms button{flex:1;margin:0;padding:10px;font-size:20px}
   #modes{display:flex;gap:10px;margin:10px 0 0}
   #overlay #modes button{flex:1;margin:0;padding:8px;font-size:18px;background:transparent;color:#ffd27a;border:2px solid rgba(255,210,122,.5)}
   #overlay #modes button.on{background:#ffd27a;color:#0b1020;border-color:#ffd27a}
@@ -50,6 +52,7 @@
   <div id="mode-pick"><label>Modo</label><div id="modes"><button data-mode="dm">DEATHMATCH</button><button data-mode="dove">POMBA DE OURO</button><button data-mode="ctf">BANDEIRA</button></div>
     <div id="ctf-opts" hidden><label for="ctf-target">Capturas para vencer</label><input id="ctf-target" type="number" min="1" max="10" value="3"></div></div>
   <button id="join" hidden>ENTRAR NA SALA</button>
+  <div id="fixed-rooms"><label>Salas fixas (mapa Inverno, sem link)</label><div id="rooms"><button id="room1">SALA 1</button><button id="room2">SALA 2</button></div></div>
   <button id="play">TREINAR COM BOT</button>
   <button id="host" class="alt">CRIAR SALA (JOGAR COM AMIGO)</button>
   <div id="room" hidden></div>
@@ -2995,10 +2998,11 @@ const conns = [];
 const r2 = v => Math.round(v * 100) / 100;
 function needPeer() { if (typeof Peer !== 'undefined') return true; roomStatus('Não foi possível carregar o módulo online. Verifique a internet e recarregue.'); return false; }
 
-$('host').onclick = () => {
+let fixedRoom = '';
+function hostRoom() {
   if (!needPeer()) return;
   saveProfile(); applyMode();
-  roomId = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 24 | 0]).join('');
+  roomId = fixedRoom || Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 24 | 0]).join('');
   roomStatus('Criando sala...');
   peer = new Peer(PEER_PREFIX + roomId);
   peer.on('open', () => {
@@ -3009,6 +3013,7 @@ $('host').onclick = () => {
     roomStatus(`Sala <b>${roomId}</b> criada. Mande este link para quem vai jogar com você:<code>${link}</code><button id="copy" class="alt">COPIAR LINK</button><button id="go">ENTRAR NO JOGO</button>`);
     $('copy').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => { $('copy').textContent = 'LINK COPIADO'; }); };
     $('go').onclick = startGame;
+    if (fixedRoom) startGame();
     $('play').hidden = true; $('host').hidden = true;
   });
   peer.on('connection', conn => {
@@ -3018,8 +3023,12 @@ $('host').onclick = () => {
   });
   // the matchmaking socket drops after a while; reconnect so new players can still find the room
   peer.on('disconnected', () => { if (!peer.destroyed) setTimeout(() => peer.reconnect(), 1000); });
-  peer.on('error', err => { if (netMode !== 'host') roomStatus(`Não deu para criar a sala (${err.type || err}). Tente de novo.`); });
-};
+  peer.on('error', err => {
+    if (fixedRoom && err.type === 'unavailable-id' && netMode !== 'host') { peer.destroy(); joinRoom(fixedRoom); return; } // someone is already hosting it: join instead
+    if (netMode !== 'host') roomStatus(`Não deu para criar a sala (${err.type || err}). Tente de novo.`);
+  });
+}
+$('host').onclick = () => { fixedRoom = ''; hostRoom(); };
 function onHostData(conn, m) {
   if (!m || typeof m !== 'object') return;
   if (m.t === 'hello' && !conn.soldier) {
@@ -3072,7 +3081,8 @@ function hostSend() {
   for (const c of conns) if (c.open) c.send(msg);
 }
 
-$('join').onclick = () => {
+$('join').onclick = () => joinRoom(roomCode);
+function joinRoom(code) {
   if (!needPeer()) return;
   saveProfile();
   roomStatus('Conectando à sala...');
@@ -3080,13 +3090,29 @@ $('join').onclick = () => {
   netMode = 'guest'; soldiers.length = 0;
   peer = new Peer();
   peer.on('open', () => {
-    hostConn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+    hostConn = peer.connect(PEER_PREFIX + code, { reliable: true });
     hostConn.on('open', () => hostConn.send({ t: 'hello', name: myName, col: myColor }));
     hostConn.on('data', m => { if (m && m.t === 'welcome') { myId = m.id; startGame(); } else if (m && m.t === 's') applySnapshot(m); });
     hostConn.on('close', () => { running = false; $('overlay').style.display = 'flex'; roomStatus('A conexão com a sala caiu. Recarregue a página para entrar de novo.'); });
   });
   peer.on('error', err => { $('join').hidden = false; roomStatus(err.type === 'peer-unavailable' ? 'Sala não encontrada. Confira o link ou peça um novo.' : `Erro de conexão (${err.type || err}).`); });
 };
+// fixed rooms: the first to click hosts the code, whoever clicks next joins it (always the winter map, deathmatch)
+const ROOM_CODES = { room1: 'SALAUM', room2: 'SALADO' };
+function enterFixed(code) { selMode = 'dm'; fixedRoom = code; $('fixed-rooms').hidden = true; hostRoom(); }
+for (const [id, code] of Object.entries(ROOM_CODES)) {
+  $(id).onclick = () => {
+    if (MAP_ID !== 'inverno') {
+      saveProfile();
+      try { localStorage.setItem('sr-map', 'inverno'); } catch (err) { /* ignore */ }
+      location.search = '?mapa=inverno&auto=' + code; // the world is built at load, so switching map reloads
+      return;
+    }
+    enterFixed(code);
+  };
+}
+if (roomCode) $('fixed-rooms').hidden = true;
+{ const auto = new URLSearchParams(location.search).get('auto'); if (MAP_ID === 'inverno' && Object.values(ROOM_CODES).includes(auto)) enterFixed(auto); }
 function applySnapshot(m) {
   const ids = new Set();
   for (const d of m.s) {
