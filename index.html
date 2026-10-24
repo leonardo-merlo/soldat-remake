@@ -76,6 +76,7 @@
     <tr><td>F</td><td>Arremessar faca (passe por cima dela para recuperar)</td></tr>
     <tr><td>F1 (segurar) / F2</td><td>Placar / minimapa</td></tr>
     <tr><td>R</td><td>Recarregar</td></tr>
+    <tr><td>G</td><td>Bandeira: arremessa a bandeira que você carrega (para um colega ou por cima de obstáculos)</td></tr>
     <tr><td>E (segurar e soltar)</td><td>Granada: quanto mais segura, mais longe vai</td></tr>
     <tr><td>Botão esquerdo (segurar)</td><td>Laser/Gravitacional: carregar e soltar. Motosserra e Criogênico: contínuo</td></tr>
     <tr><td>T</td><td>Modo do bot (só no treino): ativo → só anda → alvo parado</td></tr>
@@ -145,11 +146,11 @@ const THEME = {
 const ROCK = 1, WOOD = 2, CONC = 3;
 const rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 function groundHVolcano(x) {
-  let h = 1240 + 18 * Math.sin(x / 140) + 10 * Math.sin(x / 47 + 1);
+  const u = Math.min(x, W - x); // the map is mirrored: the right half repeats the left half
+  let h = 1240 + 18 * Math.sin(u / 140) + 10 * Math.sin(u / 47 + 1);
   if (x > 1250 && x < 1950) h += 125 * Math.sin(Math.PI * (x - 1250) / 700);
-  if (x > 2540 && x < 2820) h += 85 * Math.sin(Math.PI * (x - 2540) / 280);
-  if (x < 240) h -= (240 - x) * 1.8;
-  if (x > 3020) h -= (x - 3020) * 2.4;
+  if (u > 380 && u < 660) h += 85 * Math.sin(Math.PI * (u - 380) / 280);
+  if (u < 240) h -= (240 - u) * 1.8;
   return h;
 }
 function groundH(x) {
@@ -178,15 +179,15 @@ const MAP = MAP_ID === 'selva' ? {
 } : MAP_ID === 'espaco' ? {
   spawns: [[330, 500], [2270, 500], [690, 860], [1910, 860], [1300, 420]],
   crates: [[400, 480], [2200, 480], [1300, 420], [700, 840], [1900, 840], [1300, 760], [700, 260], [1900, 260]],
-  lanterns: [], planks: null, lava: [], pit: 1030, pitName: 'Vazio', pitMsg: 'Você caiu no vazio',
+  lanterns: [], planks: null, lava: [], pit: 1030, pitName: 'Vazio', pitMsg: 'Você caiu no vazio', grav: .5, jet: 1.2, // low gravity: long floaty falls, strong jetpack
   flags: [[330, 500], [2270, 500]],
 } : VOLCANO ? {
-  spawns: [640, 2950, 2200, 1000, 2450],
-  crates: [[700, 880], [600, 1200], [1000, 1200], [1550, 840], [1770, 620], [1260, 700], [1600, 1180], [2200, 1200], [2450, 1060], [2700, 985], [2600, 600], [2950, 1200], [330, 640], [940, 670]],
-  lanterns: [560, 800, 1000, 2350, 2500, 2850],
-  planks: { x: 1300, y: 1196, w: 600, h: 14 },
-  lava: [{ x0: 1250, x1: 1950, y: 1296 }, { x0: 2540, x1: 2820, y: 1282 }],
-  flags: [[700, 850], [2950, 450]],
+  spawns: [900, 2300, 1080, 2120, 780, 2420],
+  crates: [[700, 880], [2500, 880], [1000, 1200], [2200, 1200], [330, 640], [2870, 640], [940, 670], [2260, 670], [1260, 700], [1940, 700], [1450, 840], [1750, 840], [1600, 1180], [1600, 620]],
+  lanterns: [560, 800, 1000, 2200, 2400, 2640],
+  planks: null,
+  lava: [{ x0: 380, x1: 660, y: 1282 }, { x0: 1250, x1: 1950, y: 1296 }, { x0: 2540, x1: 2820, y: 1282 }],
+  flags: [[700, 850], [2500, 850]],
 } : {
   spawns: [640, 2600, 1900, 2300],
   crates: [[560, 900], [1380, 880], [1690, 620], [2050, 1100], [2450, 1000], [2700, 380], [330, 600], [905, 600], [640, 1010], [1060, 1010], [1790, 1100], [2290, 1000], [2880, 1000], [420, 1000]],
@@ -219,23 +220,20 @@ if (MAP_ID === 'selva') {
   symm(WOOD, rect(560, 880, 260, 18));
 }
 if (VOLCANO) {
-  POLYS.push({ m: CONC, p: rect(250, 660, 150, 34) });
-  POLYS.push({ m: CONC, p: rect(300, 820, 170, 30) });
-  // basalt shelf with an overhang you can walk under
-  POLYS.push({ m: ROCK, p: [[480, 940], [560, 915], [700, 905], [860, 912], [1000, 925], [1100, 950], [1080, 985], [960, 995], [800, 990], [640, 1000], [520, 985]] });
-  POLYS.push({ m: CONC, p: rect(860, 690, 170, 18) });
-  // bridge over the lava lake, with rock ramps at both ends
-  POLYS.push({ m: WOOD, p: rect(1300, 1196, 600, 14) });
-  POLYS.push({ m: ROCK, p: [[1180, 1250], [1240, 1214], [1300, 1196], [1300, 1210], [1262, 1238], [1250, 1280], [1180, 1280]] });
-  POLYS.push({ m: ROCK, p: [[2020, 1250], [1960, 1214], [1900, 1196], [1900, 1210], [1938, 1238], [1950, 1280], [2020, 1280]] });
+  // mirrored map: everything on the left half has a twin on the right half
+  POLYS.push({ m: ROCK, p: mirrorPoly([[0, 150], [70, 170], [130, 330], [120, 520], [175, 690], [150, 860], [215, 1040], [240, 1200], [0, 1300]]) });
+  symm(CONC, rect(250, 660, 150, 34));
+  symm(CONC, rect(300, 820, 170, 30));
+  // basalt shelf with an overhang you can walk under, above the side lava pool
+  symm(ROCK, [[480, 940], [560, 915], [700, 905], [860, 912], [1000, 925], [1100, 950], [1080, 985], [960, 995], [800, 990], [640, 1000], [520, 985]]);
+  symm(CONC, rect(860, 690, 170, 18));
+  // bridge over the central lava lake: planks with gaps, so you can fall into the lava; rock ramps at both ends
+  for (const [a, b] of [[1300, 1370], [1405, 1475], [1520, 1680], [1725, 1795], [1830, 1900]]) POLYS.push({ m: WOOD, p: rect(a, 1196, b - a, 14) });
+  symm(ROCK, [[1180, 1250], [1240, 1214], [1300, 1196], [1300, 1210], [1262, 1238], [1250, 1280], [1180, 1280]]);
   // floating basalt islands over the lake (jetpack routes)
-  POLYS.push({ m: ROCK, p: [[1440, 880], [1510, 858], [1600, 862], [1660, 890], [1610, 918], [1500, 915]] });
-  POLYS.push({ m: ROCK, p: [[1660, 660], [1740, 636], [1830, 644], [1880, 672], [1810, 700], [1700, 696]] });
-  POLYS.push({ m: ROCK, p: [[1180, 740], [1240, 722], [1310, 728], [1340, 752], [1280, 770], [1200, 766]] });
-  // plateau on the right with a cave under it, and two platforms inside the cave
-  POLYS.push({ m: ROCK, p: [[2150, 700], [2250, 660], [2450, 640], [2650, 655], [2850, 620], [3050, 590], [W, 580], [W, 1300], [3080, 1300], [3050, 1150], [3010, 1000], [3040, 880], [2950, 820], [2800, 800], [2600, 812], [2420, 790], [2300, 770], [2200, 745]] });
-  POLYS.push({ m: CONC, p: rect(2380, 1080, 150, 16) });
-  POLYS.push({ m: CONC, p: rect(2650, 1000, 120, 14) });
+  POLYS.push({ m: ROCK, p: [[1510, 880], [1560, 862], [1640, 862], [1690, 880], [1650, 914], [1550, 914]] });
+  POLYS.push({ m: ROCK, p: [[1560, 640], [1600, 624], [1640, 640], [1620, 662], [1580, 662]] });
+  symm(ROCK, [[1210, 730], [1270, 712], [1340, 718], [1370, 742], [1310, 760], [1230, 756]]);
 } else if (!ARENA) {
 POLYS.push({ m: CONC, p: rect(250, 640, 150, 36) });
 POLYS.push({ m: CONC, p: rect(300, 760, 170, 34) });
@@ -271,6 +269,7 @@ function lavaAt(x, y) {
 function lavaAhead(x) { for (const L of MAP.lava) if (L.path && x >= L.lx0 - 10 && x <= L.lx1 + 10) return L; return null; }
 const LIGHTS = [];
 let worldCanvas = null, ROCK_LAYERS = null;
+const WS = Math.min(2, 4096 / W); // baked world pixels per world unit; kept under 4096 px wide because larger canvases are drawn partially by some GPUs
 
 function buildWorld() {
   const mc = mkCanvas(W, H), m = mc.getContext('2d', { willReadFrequently: true });
@@ -305,7 +304,7 @@ function buildWorld() {
         r *= sh; g *= sh; b *= sh;
         const vd = Math.abs(s2 - 0.5), vein = dt > 10 && vd < 0.005 ? 1 - vd / 0.005 : 0;
         let heat = 0;
-        for (const L of MAP.lava) if (x > L.x0 - 60 && x < L.x1 + 60) heat = Math.max(heat, 1 - Math.abs(y - L.y) / 90);
+        for (const L of MAP.lava) if (x > L.x0 - 60 && x < L.x1 + 60) heat = Math.max(heat, (1 - Math.abs(y - L.y) / 90) * (x < L.x0 ? (x - L.x0 + 60) / 60 : x > L.x1 ? (L.x1 + 60 - x) / 60 : 1));
         heat = Math.max(0, heat);
         r += 210 * vein + 120 * heat; g += 80 * vein + 40 * heat; b += 12 * vein;
         if (dt < ashT) { r = 96 + 34 * n; g = 88 + 28 * n; b = 86 + 24 * n; }
@@ -357,7 +356,8 @@ function buildWorld() {
   const ovc = mkCanvas(W, H); ovc.getContext('2d').putImageData(ovImg, 0, 0);
   ROCK_LAYERS = { mask: rmc, overlay: ovc };
 
-  const wc = mkCanvas(W, H), w = wc.getContext('2d');
+  const wc = mkCanvas(Math.round(W * WS), Math.round(H * WS)), w = wc.getContext('2d');
+  w.scale(WS, WS);
   const rng = mulberry(42);
   const surf = new Int16Array(W);
   for (let x = 0; x < W; x++) { let y = 0; while (y < H && !mask[y * W + x]) y++; surf[x] = y; }
@@ -485,7 +485,9 @@ function decorateArena(w, tc, surf, rng, placeProp) {
       w.fillRect(x, y + 1, 2, 2);
       if (x % 66 < 22) LIGHTS.push({ x, y: y - 3, r: 46, c: '90,215,255', a: .22 });
     }
-    placeProp('barrel', 470, 22, false, 500); placeProp('barrel', 2130, 22, false, 500); placeProp('sandbags', 520, 18, false, 500); placeProp('sandbags', 2080, 18, true, 500);
+    // this map's own scenery: energy pylons, dishes, consoles
+    const kits = [drawPylon, drawDish, drawConsole, drawConsole];
+    scatterProps(surfaceSpots(4, 56).filter(q => q[1] < MAP.pit - 40), rng, (x, y) => kits[rng() * kits.length | 0](w, x, y + 1), 16, 150);
   }
   if (jungle) for (let x = 90; x < W; x += 210) LIGHTS.push({ x, y: 300 + (x % 3) * 220, r: 110, c: '150,255,160', a: .16 });
 }
@@ -508,40 +510,100 @@ function buildArenaBackground(rng) {
       BG.push({ img: c, f: 0.13, A: 960, row: h, bottom: '#0e3a26' }); }
   }
 }
+// every flat spot where something can stand (open air above, solid below on both sides), used to scatter each map's own props
+function surfaceSpots(step = 4, above = 44) {
+  const out = [];
+  for (let x = 14; x < W - 14; x += step) for (let y = 40; y < H - 40; y++) {
+    const i = y * W + x;
+    if (!mask[i] || mask[i - W]) continue;
+    let free = true; for (let k = 3; k <= above; k += 6) if (mask[i - k * W]) { free = false; break; }
+    if (free && mask[y * W + x - 6] && mask[y * W + x + 6] && !mask[(y - 3) * W + x - 6] && !mask[(y - 3) * W + x + 6]) out.push([x, y, mask[i]]);
+  }
+  return out;
+}
+const FIRE_SPOTS = []; // braziers and torches: flames are spawned as particles every frame
+function drawBrazier(g, x, y) {
+  g.strokeStyle = '#241c1e'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 7, y); g.lineTo(x - 3, y - 13); g.moveTo(x + 7, y); g.lineTo(x + 3, y - 13); g.moveTo(x, y); g.lineTo(x, y - 13); g.stroke();
+  g.fillStyle = '#322729'; g.beginPath(); g.moveTo(x - 10, y - 17); g.lineTo(x + 10, y - 17); g.lineTo(x + 6, y - 10); g.lineTo(x - 6, y - 10); g.closePath(); g.fill();
+  g.fillStyle = '#5a4547'; g.fillRect(x - 10, y - 18, 20, 2);
+  g.fillStyle = '#e8651c'; g.beginPath(); g.ellipse(x, y - 17.5, 8, 2, 0, 0, 7); g.fill();
+  LIGHTS.push({ x, y: y - 22, r: 95, c: '255,140,50', a: .5 }); FIRE_SPOTS.push({ x, y: y - 17 });
+}
+function drawCrystals(g, x, y, rng) {
+  const n = 3 + (rng() * 3 | 0);
+  for (let k = 0; k < n; k++) {
+    const cx = x + (k - n / 2) * 5 + rng() * 3, h = 10 + rng() * 22, w = 2.6 + rng() * 2.4, lean = (rng() - .5) * 6;
+    g.fillStyle = k % 2 ? '#2a1218' : '#3a1820'; g.beginPath(); g.moveTo(cx - w, y); g.lineTo(cx + lean, y - h); g.lineTo(cx + w, y); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,90,60,.55)'; g.beginPath(); g.moveTo(cx - w * .1, y); g.lineTo(cx + lean, y - h); g.lineTo(cx + w * .7, y); g.closePath(); g.fill();
+  }
+  LIGHTS.push({ x, y: y - 12, r: 50, c: '255,70,40', a: .32 });
+}
+function drawBones(g, x, y, rng) {
+  g.fillStyle = '#cdbfae'; g.beginPath(); g.ellipse(x, y - 4.5, 4.6, 4, 0, 0, 7); g.fill(); g.fillRect(x - 2.6, y - 2.6, 5.2, 3);
+  g.fillStyle = '#1a1214'; g.beginPath(); g.arc(x - 1.8, y - 5, 1.1, 0, 7); g.arc(x + 1.8, y - 5, 1.1, 0, 7); g.fill(); g.fillRect(x - .4, y - 3.2, .8, 1.4);
+  g.strokeStyle = '#b8aa98'; g.lineWidth = 1.5; for (let k = 0; k < 3; k++) { const ox = x + 6 + k * 4 + rng() * 2; g.beginPath(); g.moveTo(ox, y - 1); g.lineTo(ox + 3 + rng() * 3, y - 6 - rng() * 3); g.stroke(); }
+}
+function drawSpikes(g, x, y, rng) {
+  for (let k = 0; k < 4; k++) { const cx = x + k * 4 - 6, h = 9 + rng() * 17; g.fillStyle = k % 2 ? '#1c1214' : '#2a1b1d'; g.beginPath(); g.moveTo(cx - 3, y + 1); g.lineTo(cx + (rng() - .5) * 3, y - h); g.lineTo(cx + 3, y + 1); g.closePath(); g.fill(); }
+}
+function drawPylon(g, x, y) {
+  g.fillStyle = '#46536e'; g.fillRect(x - 1.6, y - 44, 3.2, 44); g.fillStyle = '#2c3650'; g.fillRect(x - 6, y - 3, 12, 3);
+  const gr = g.createRadialGradient(x, y - 46, 0, x, y - 46, 8); gr.addColorStop(0, 'rgba(180,250,255,1)'); gr.addColorStop(1, 'rgba(90,215,255,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y - 46, 8, 0, 7); g.fill();
+  LIGHTS.push({ x, y: y - 46, r: 85, c: '90,215,255', a: .4 }); BEACONS.push({ x, y: y - 46 });
+}
+function drawDish(g, x, y) {
+  g.fillStyle = '#46536e'; g.fillRect(x - 1.4, y - 20, 2.8, 20);
+  g.strokeStyle = '#8fa2c4'; g.lineWidth = 2; g.beginPath(); g.arc(x, y - 22, 11, Math.PI * .15, Math.PI * .85); g.stroke();
+  g.fillStyle = '#5a6a8c'; g.fillRect(x - 1, y - 32, 2, 11); g.fillStyle = '#9fe9ff'; g.fillRect(x - 2, y - 34, 4, 3);
+}
+function drawConsole(g, x, y) {
+  g.fillStyle = '#323d56'; g.fillRect(x - 9, y - 12, 18, 12); g.fillStyle = '#1b2236'; g.fillRect(x - 7, y - 10, 14, 6);
+  g.fillStyle = 'rgba(110,230,255,.9)'; g.fillRect(x - 6, y - 9, 12, 4); g.fillStyle = '#ff6a6a'; g.fillRect(x - 6, y - 3, 2, 1.5); g.fillStyle = '#7dff9a'; g.fillRect(x - 2, y - 3, 2, 1.5);
+  LIGHTS.push({ x, y: y - 8, r: 40, c: '110,230,255', a: .25 });
+}
+const BEACONS = []; // blinking lights on the space station
+function scatterProps(spots, rng, kit, max, gap) {
+  const placed = [];
+  for (let k = spots.length - 1; k > 0; k--) { const j = rng() * (k + 1) | 0; [spots[k], spots[j]] = [spots[j], spots[k]]; }
+  for (const [x, y] of spots) {
+    if (placed.length >= max) break;
+    if (placed.some(q => Math.abs(q - x) < gap && true)) continue;
+    if (lavaAhead(x) && y > 1250) continue;
+    placed.push(x); kit(x, y);
+  }
+}
 function decorateVolcano(w, tc, surf, rng, placeProp) {
   // charred trees on the top surfaces
   for (let x = 20; x < W - 20; x += 2) {
     if (rng() < 0.012 && mask[surf[x] * W + x] === ROCK && Math.abs(surf[x + 6] - surf[x - 6]) < 18 && !lavaAhead(x)) drawDeadTree(w, x, surf[x] + 3, 26 + rng() * 50, rng);
   }
-  // iron struts under the left ledges
+  // iron struts under the ledges (left and right twins)
   w.strokeStyle = '#3a2c2a'; w.lineWidth = 4;
-  for (const bx of [270, 380]) { w.beginPath(); w.moveTo(bx, 694); w.lineTo(bx, groundH(bx)); w.stroke(); }
-  for (const bx of [320, 450]) { w.beginPath(); w.moveTo(bx, 850); w.lineTo(bx, groundH(bx)); w.stroke(); }
-  w.lineWidth = 2;
-  for (let y = 720; y < 1170; y += 40) { w.beginPath(); w.moveTo(270, y); w.lineTo(380, y + 40); w.moveTo(380, y); w.lineTo(270, y + 40); w.stroke(); }
-  // bridge pillars standing in the lava
-  for (const px of [1360, 1500, 1700, 1840]) {
+  for (const mx of [false, true]) {
+    const X = v => mx ? W - v : v;
+    for (const bx of [270, 380]) { w.beginPath(); w.moveTo(X(bx), 694); w.lineTo(X(bx), groundH(X(bx))); w.stroke(); }
+    for (const bx of [320, 450]) { w.beginPath(); w.moveTo(X(bx), 850); w.lineTo(X(bx), groundH(X(bx))); w.stroke(); }
+    w.lineWidth = 2;
+    for (let y = 720; y < 1170; y += 40) { w.beginPath(); w.moveTo(X(270), y); w.lineTo(X(380), y + 40); w.moveTo(X(380), y); w.lineTo(X(270), y + 40); w.stroke(); }
+    w.lineWidth = 4;
+  }
+  // bridge pillars standing in the lava, under the planks
+  for (const px of [1335, 1440, 1600, 1760, 1865]) {
     const gr = w.createLinearGradient(px - 7, 0, px + 7, 0); gr.addColorStop(0, '#231a1a'); gr.addColorStop(.5, '#4a3a36'); gr.addColorStop(1, '#1a1212');
     w.fillStyle = gr; w.fillRect(px - 7, 1210, 14, groundH(px) - 1210);
   }
   w.drawImage(tc, 0, 0);
-  // chain railing on the bridge
+  // chain railing on the planks
   w.strokeStyle = '#2a2120'; w.lineWidth = 3;
-  for (let x = 1310; x <= 1890; x += 58) { w.beginPath(); w.moveTo(x, 1196); w.lineTo(x, 1174); w.stroke(); }
+  const SEG = [[1300, 1370], [1405, 1475], [1520, 1680], [1725, 1795], [1830, 1900]];
+  for (const [a, b] of SEG) for (let x = a + 8; x <= b - 6; x += 30) { w.beginPath(); w.moveTo(x, 1196); w.lineTo(x, 1176); w.stroke(); }
   w.strokeStyle = 'rgba(120,96,80,.85)'; w.lineWidth = 1.2;
-  for (let x = 1310; x < 1890; x += 58) { w.beginPath(); w.moveTo(x, 1176); w.quadraticCurveTo(x + 29, 1186, x + 58, 1176); w.stroke(); }
-  for (const lx of [700, 2300, 2900, 940]) drawLamp(w, lx, (lx === 940 ? 690 : surf[lx]) + 2);
-  placeProp('watchtower', 2720, 120);
-  placeProp('tent', 2470, 42, true);
-  placeProp('sandbags', 2600, 19);
-  placeProp('fence', 2950, 22);
-  placeProp('sandbags', 760, 19);
-  placeProp('signpost', 1150, 40, false, 1150);
-  placeProp('sandbags', 1330, 18, false, 1180); placeProp('sandbags', 1870, 18, true, 1180);
-  placeProp('barrel', 2420, 24, false, 1060); placeProp('barrel', 2436, 24, false, 1060);
-  placeProp('barrel', 880, 24, false, 1100); placeProp('fence', 1060, 21, true, 1100);
-  placeProp('tent', 2200, 40, false, 1100); placeProp('sandbags', 2920, 19, true, 1100);
-  placeProp('barrel', 340, 24, false, 640);
+  for (const [a, b] of SEG) for (let x = a + 8; x + 30 <= b - 6; x += 30) { w.beginPath(); w.moveTo(x, 1178); w.quadraticCurveTo(x + 15, 1186, x + 30, 1178); w.stroke(); }
+  // this map's own scenery: braziers, obsidian crystals, bone piles and rock spikes (replaces the winter props)
+  const spots = surfaceSpots();
+  const pick = [drawBrazier, drawBrazier, drawCrystals, drawCrystals, drawBones, drawSpikes];
+  scatterProps(spots, rng, (x, y) => pick[rng() * pick.length | 0](w, x, y + 1, rng), 26, 120);
+  for (const [bx, by] of [[705, 905], [W - 705, 905], [1308, 1196], [W - 1308, 1196]]) drawBrazier(w, bx, by);
   if (ready(IMG['rock-small'])) {
     const rk = IMG['rock-small'];
     w.save(); w.filter = 'brightness(.38) sepia(.35)';
@@ -750,6 +812,8 @@ const WEAPONS = [
   { name: 'Foguete Teleguiado', kick: .8, short: 'Teleguiado', mult: 1400, delay: 20, mag: 1, reload: 200, speed: 7, spread: 0, moveAcc: 0, push: 0, mods: [1.15, 1, .9], auto: false, kind: 'rocket', explosive: { r: 72 }, straight: true, life: 320, noShell: true, img: 'rocket-launcher', fire: null, cx: .3, cy: .66, fx: 0, fy: 0 },
   { name: 'Arma de Portais', kick: .1, short: 'Portais', mult: 0, delay: 14, mag: 8, reload: 60, speed: 34, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'portal', straight: true, life: 90, noShell: true, img: 'portal-gun', fire: null, cx: .25, cy: .6, fx: 0, fy: 0 },
   { name: 'Congelador Criogênico', kick: 0, short: 'Criogênico', mult: 0, delay: 2, mag: 110, reload: 170, speed: 11.5, spread: .22, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'cryo', straight: true, life: 42, noShell: true, img: 'cryo-gun', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
+  { name: 'Lança-chamas', kick: 0, short: 'Lança-chamas', mult: 0, delay: 2, mag: 140, reload: 200, speed: 8.5, spread: .2, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'flame', straight: true, life: 34, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
+  { name: 'Construtor de Muros', kick: 0, short: 'Construtor', mult: 0, delay: 18, mag: 3, reload: 220, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'builder', range: 170, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
   { name: 'Lançador de Buraco Negro', kick: .5, short: 'Buraco Negro', mult: 0, delay: 30, mag: 1, reload: 300, speed: 6.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'blackhole', straight: true, life: 110, noShell: true, img: 'blackhole-gun', fire: null, cx: .25, cy: .6, fx: 0, fy: 0 },
 ];
 const GRENADE = { mult: 1500, r: 85, fuse: 180 };
@@ -790,7 +854,11 @@ if (!ARENA) {
   loadImage('bg-mid', [VOLCANO ? 'assets/bg/volcano-mid.png' : 'assets/bg/castle-lake.png'], 1);
 }
 loadImage('wood-planks', ['assets/bg/wood-planks.png']);
-if (!ARENA) loadImage('rock', [VOLCANO ? 'assets/bg/basalt.png' : 'assets/bg/rock.png'], 1);
+if (!ARENA) {
+  const rb = VOLCANO ? 'assets/bg/basalt' : 'assets/bg/rock';
+  loadImage('rock', [rb + '.png'], 1);
+  for (const k of [2, 3, 4]) loadImage('rock' + k, [`${rb}-${k}.png`], 1); // optional extra textures: missing files are simply skipped
+}
 if (VOLCANO) loadImage('dead-tree', ['assets/props/dead-tree.png'], 1);
 for (const k of ['pine-large', 'pine-medium', 'pine-small', 'lamp', 'crate', 'rock-small', 'sandbags', 'barrel', 'fence', 'signpost', 'tent', 'watchtower', 'lantern-hang', 'pk-health', 'pk-ammo', 'pk-grenades', 'pk-vest', 'pk-fuel', 'pk-potion']) loadImage(k, [`assets/props/${k}.png`]);
 for (let i = 1; i <= 16; i++) loadImage('explode' + i, [`assets/fx/explode${i}.png`, `assets/original/fx/explode${i}.png`]);
@@ -871,6 +939,7 @@ function sfxBarrett(x, y) {
 }
 function sfxShot(w, x, y) {
   if (w.kind === 'sniper') { sfxBarrett(x, y); return; }
+  if (w.kind === 'flame') { noise(.09, 1400, volAt(x, y) * .3, 'bandpass'); return; }
   if (w.kind === 'rocket') { noise(.3, 700, volAt(x, y) * .7, 'lowpass'); blip(240, 90, .3, .25, 'sawtooth', x, y); return; }
   if (w.kind === 'portal') { blip(900, 400, .18, .2, 'sine', x, y); return; }
   if (w.kind === 'cryo') { noise(.07, 7000, volAt(x, y) * .16, 'highpass'); return; }
@@ -1055,15 +1124,17 @@ function updateSoldier(e) {
   e.jetting = false;
   if (inp.jet && e.jet > 0) {
     e.jetting = true; e.jet--;
-    if (e.onGround) e.vy -= 2.5 * JETSPEED;
-    else if (e.stance === 'prone') e.vx += e.facing * JETSPEED / 2;
-    else e.vy -= JETSPEED;
+    const jp = JETSPEED * (MAP.jet || 1);
+    if (e.onGround) e.vy -= 2.5 * jp;
+    else if (e.stance === 'prone') e.vx += e.facing * jp / 2;
+    else e.vy -= jp;
     jetFx(e);
   } else if (e.jet < START_JET && (e.onGround || tick % 2 === 0)) e.jet++;
-  e.vy += GRAV * (e.buff === 'float' ? .35 : 1);
+  e.vy += GRAV * (MAP.grav || 1) * (e.buff === 'float' ? .35 : 1);
   const airborne = !e.onGround, pv = Math.hypot(e.vx, e.vy);
   moveSoldier(e);
   if (e.flingT > 0) flingImpact(e, pv);
+  if (MAP.waterfall && Math.abs(e.x - MAP.waterfall.x) < MAP.waterfall.w / 2 && e.y > MAP.waterfall.y1 - 16 && !e.dead) { e.y = MAP.waterfall.y0 + 24; e.vy = Math.max(e.vy * .6, 1); e.jumpT = -1; particles.push({ t: 'ring', x: e.x, y: MAP.waterfall.y1 - 20, life: 12, max: 12, s: 18, col: '200,240,255' }); }
   if (MAP.pit && e.y > MAP.pit) { e.protect = 0; e.buff = ''; e.pitDeath = true; hurt(e, 9999, e, MAP.pitName, e.x, MAP.pit - 4, 0, -1); return; }
   if (lavaAt(e.x, e.y - 2)) {
     // lava: thick (slows you down, pushes up a little) and burns fast; jetpack out
@@ -1080,6 +1151,7 @@ function updateSoldier(e) {
   if (inp.swapPressed && e.sec !== e.wi) { const t = e.wi; e.wi = e.sec; e.sec = t; e.lastWi = t; holster(); }
   if (inp.switchTo != null && inp.switchTo !== e.wi) { if (inp.switchTo === e.sec) e.sec = e.wi; e.lastWi = e.wi; e.wi = inp.switchTo; holster(); }
   if (inp.potionPressed) drinkPotion(e);
+  if (inp.flagPressed) throwFlag(e);
   if (e.fireT > 0) e.fireT--;
   if (e.reloadT > 0 && --e.reloadT === 0) e.ammo[e.wi] = WEAPONS[e.wi].mag;
   const wn = WEAPONS[e.wi];
@@ -1256,6 +1328,7 @@ function shoot(e, w) {
   e.ammo[e.wi]--; e.fireT = w.delay; e.flashT = 3;
   if (w.kind === 'chainsaw') { sawCut(e, w); return; }
   if (w.kind === 'molotov') { throwMolotov(e, w); return; }
+  if (w.kind === 'builder') { if (!buildWall(e, w)) { e.ammo[e.wi]++; e.fireT = 6; } return; }
   const s = shoulder(e), c = Math.cos(e.aim), sn = Math.sin(e.aim);
   const reach = HAND + gunLength(w);
   const mx = s.x + c * reach, my = s.y + sn * reach;
@@ -1329,6 +1402,7 @@ function sawCut(e, w) {
   const x = hp.sx + hp.c * (HAND + reach * .7), y = hp.sy + hp.sn * (HAND + reach * .7);
   for (const k of CRATES) if (k.alive && Math.abs(x - k.x) < 16 && y > k.y - 26 && y < k.y + 2) damageCrate(k, 9);
   for (const c of ICICLES) if (c.state === 0 && Math.abs(x - c.x) < c.w + 6 && y > c.y - 4 && y < c.y + c.len) { c.state = 1; c.vy = 0; c.by = e; }
+  { const wq = wallAt(x, y); if (wq) hurtWall(wq, 9); }
   if (solid(x, y)) particles.push({ t: 'spark', x, y, vx: -hp.c * rnd(.5, 2.5) + rnd(-1, 1), vy: rnd(-2.5, -.5), life: rnd(8, 18), max: 18, s: 1 });
   sawFx(x, y, hitAny, e);
   emit({ t: 'saw', x, y, h: hitAny ? 1 : 0, id: e.id });
@@ -1355,6 +1429,7 @@ function fireLaser(e, w, power) {
     for (const k of CRATES) if (k.alive && Math.abs(x - k.x) < 14 && y > k.y - 25 && y < k.y + 2) damageCrate(k, 400);
     for (const ic of ICICLES) if (ic.state === 0 && Math.abs(x - ic.x) < ic.w + 2 && y > ic.y - 2 && y < ic.y + ic.len) { ic.state = 1; ic.vy = 0; ic.by = e; }
   }
+  const wq = wallAt(x, y); if (wq) hurtWall(wq, 60 + 220 * power);
   beamFx(hp.mx, hp.my, x, y, power, e); emit({ t: 'beam', x1: hp.mx, y1: hp.my, x2: x, y2: y, p: power, id: e.id });
   e.vx -= c * (1 + 3.5 * power); e.vy -= sn * (.6 + 2 * power);
   if (e === player) shakeAmt = Math.max(shakeAmt, 5 + 6 * power);
@@ -1511,6 +1586,7 @@ function trailFx() {
     particles.push({ t: 'smoke', x: b.x - b.vx * .4, y: b.y - b.vy * .4, vx: rnd(-.2, .2), vy: rnd(-.2, .2), life: 26, max: 26, s: 1.6 });
     if (tick % 2 === 0) particles.push({ t: 'fire', x: b.x - b.vx * .3, y: b.y - b.vy * .3, vx: -b.vx * .08, vy: -b.vy * .08, life: 9, max: 9, s: 2.2 });
   }
+  for (const b of bullets) if (b.w.kind === 'flame' && tick % 2 === 0) particles.push({ t: 'fire', x: b.x + rnd(-2, 2), y: b.y + rnd(-2, 2), vx: b.vx * .05, vy: -.3, life: 14, max: 14, s: rnd(2, 4) });
   for (const m of molotovs) particles.push({ t: 'fire', x: m.x + rnd(-1, 1), y: m.y - 4, vx: rnd(-.2, .2), vy: rnd(-.9, -.3), life: 12, max: 12, s: rnd(1.4, 2.4) });
 }
 
@@ -1604,6 +1680,63 @@ function holeVisualFx() {
   for (const h of holes) for (let n = 0; n < 2; n++) particles.push({ t: 'vort', cx: h.x, cy: h.y, a: rnd(0, 6.28), r: rnd(40, 110), w: .2, life: 30, max: 30, col: Math.random() < .5 ? '170,90,255' : '110,60,220' });
 }
 
+// --- wall builder: drops a slab of iron ahead (a standing wall when aiming sideways, a floor/ceiling slab when aiming up or down).
+// Soldiers and bullets cannot pass it until it is shot apart or times out: use it to defend or to box an enemy in.
+const walls = [];
+function wallFits(x0, y0, ww, hh) {
+  if (x0 < 4 || y0 < 4 || x0 + ww > W - 4 || y0 + hh > (MAP.pit || H) - 6) return false;
+  for (let y = y0; y < y0 + hh; y += 3) for (let x = x0; x < x0 + ww; x += 3) if (mask[y * W + x]) return false;
+  for (const t of soldiers) { if (t.dead) continue; const [tw, th] = dims(t); if (t.x + tw / 2 + 2 > x0 && t.x - tw / 2 - 2 < x0 + ww && t.y + 2 > y0 && t.y - th - 2 < y0 + hh) return false; }
+  return true;
+}
+function buildWall(e, w) {
+  const s = shoulder(e), c = Math.cos(e.aim), sn = Math.sin(e.aim), vertical = Math.abs(sn) < .72, ww = vertical ? 14 : 80, hh = vertical ? 80 : 14;
+  const far = Math.min(Math.hypot(e.input.aimX - s.x, e.input.aimY - s.y), w.range);
+  for (let d = far; d >= 26; d -= 10) {
+    let x0 = Math.round(s.x + c * d - ww / 2), y0 = Math.round(s.y + sn * d - hh / 2), ok = false;
+    for (const lift of [0, 6, 12, 18, 24, 30, 38]) if (wallFits(x0, y0 - lift, ww, hh)) { y0 -= lift; ok = true; break; } // a standing wall rests on the ground instead of sinking into it
+    if (!ok) continue;
+    const cells = [];
+    for (let y = y0; y < y0 + hh; y++) for (let x = x0; x < x0 + ww; x++) { const i = y * W + x; if (!mask[i]) { mask[i] = CONC; cells.push(i); } }
+    walls.push({ x: x0, y: y0, w: ww, h: hh, hp: 450, life: 1500, cells, owner: e, hitT: 0 });
+    wallFx(x0 + ww / 2, y0 + hh / 2, ww, hh); emit({ t: 'wall', x: x0 + ww / 2, y: y0 + hh / 2, w: ww, h: hh });
+    return true;
+  }
+  return false;
+}
+function wallFx(x, y, ww, hh) {
+  for (let i = 0; i < 14; i++) particles.push({ t: 'spark', x: x + rnd(-ww / 2, ww / 2), y: y + rnd(-hh / 2, hh / 2), vx: rnd(-2, 2), vy: rnd(-2, 1), life: rnd(10, 22), max: 22, s: 1 });
+  noise(.18, 900, volAt(x, y) * .6, 'lowpass'); blip(300, 120, .15, .25, 'square', x, y);
+}
+function wallAt(x, y) { for (const q of walls) if (x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h) return q; return null; }
+function hurtWall(q, dmg) { q.hp -= dmg; q.hitT = 6; if (q.hp <= 0) removeWall(q, true); }
+function removeWall(q, broken) {
+  const i = walls.indexOf(q); if (i < 0) return; walls.splice(i, 1);
+  for (const c of q.cells) if (mask[c] === CONC) mask[c] = 0;
+  if (broken) wallFx(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h);
+}
+function updateWalls() { for (let i = walls.length - 1; i >= 0; i--) { const q = walls[i]; if (q.hitT > 0) q.hitT--; if (--q.life <= 0) removeWall(q, false); } }
+function drawWalls() {
+  for (const q of walls) {
+    ctx.globalAlpha = q.life < 180 && (q.life >> 3) % 2 ? .45 : 1;
+    const g = ctx.createLinearGradient(q.x, q.y, q.x + q.w, q.y + q.h); g.addColorStop(0, '#9aa6bb'); g.addColorStop(.5, '#5f6c82'); g.addColorStop(1, '#394357');
+    ctx.fillStyle = g; ctx.fillRect(q.x, q.y, q.w, q.h);
+    ctx.strokeStyle = '#1b212e'; ctx.lineWidth = 1.5; ctx.strokeRect(q.x + .75, q.y + .75, q.w - 1.5, q.h - 1.5);
+    ctx.fillStyle = 'rgba(225,238,255,.6)';
+    for (let a = 4; a < q.w; a += 16) for (let b = 4; b < q.h; b += 16) ctx.fillRect(q.x + a, q.y + b, 1.6, 1.6);
+    const dmg = 1 - q.hp / 450; ctx.strokeStyle = 'rgba(10,12,20,.7)'; ctx.lineWidth = .8;
+    for (let k = 0; k < dmg * 7; k++) { const cx = q.x + ((k * 37) % q.w), cy = q.y + ((k * 53) % q.h); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + ((k * 7) % 9) - 4, cy + ((k * 11) % 9) - 4); ctx.stroke(); }
+    if (q.hitT > 0) { ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(q.x, q.y, q.w, q.h); }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// --- flamethrower: a short, wide jet of fire; whoever it touches catches fire and keeps burning
+function flameHit(t, b) {
+  if (t.buff !== 'shield') { t.burnT = Math.max(t.burnT, 130); t.burnBy = b.owner; }
+  hurt(t, 2.6, b.owner, 'Lança-chamas', b.x, b.y, b.vx / 9, b.vy / 9, 'fire');
+}
+
 // --- potion: drink with V for a random 10 s boost (kept in the inventory; crates drop them)
 const POTIONS = [['shield', 'IMUNIDADE', '255,215,90'], ['dmg', 'DANO EM DOBRO', '255,90,74'], ['speed', 'VELOCIDADE', '79,227,255'], ['float', 'LEVITAÇÃO', '199,162,255'], ['regen', 'REGENERAÇÃO', '109,255,138']];
 function drinkPotion(e) {
@@ -1629,7 +1762,7 @@ function hurt(t, dmg, src, wname, hx, hy, dirx, diry, quiet) {
   if (t.armor > 0) { const ab = Math.min(t.armor, dmg * 0.6); t.armor -= ab; dmg -= ab; }
   t.hp -= dmg;
   hitFx(t, src, hx, hy, dirx, diry, quiet);
-  emit({ t: 'hit', tgt: t.id, src: src && src.id, x: hx, y: hy, dx: dirx, dy: diry, q: quiet ? 1 : 0 });
+  emit({ t: 'hit', tgt: t.id, src: src && src.id, x: hx, y: hy, dx: dirx, dy: diry, q: quiet === 'fire' ? 2 : quiet ? 1 : 0 });
   if (t.hp <= 0) {
     makeRagdoll(t, dirx * 2.2, diry * 1.5 - 1);
     t.hp = 0; t.dead = true; t.respawnT = 110; t.deaths++; t.wantProne = false; t.jumpT = -1; t.gCharge = -1;
@@ -1643,7 +1776,8 @@ function hurt(t, dmg, src, wname, hx, hy, dirx, diry, quiet) {
 }
 function hitFx(t, src, hx, hy, dirx, diry, quiet) {
   if (t) t.hitFlash = 6;
-  if (quiet) { for (let i = 0; i < 3; i++) particles.push({ t: 'snow', x: hx, y: hy, vx: rnd(-1.2, 1.2), vy: rnd(-1.5, -.2), life: 24, max: 24, s: rnd(1, 2) }); }
+  if (quiet === 'fire') { for (let i = 0; i < 3; i++) particles.push({ t: 'fire', x: hx, y: hy, vx: rnd(-1, 1), vy: rnd(-1.6, -.4), life: rnd(12, 22), max: 22, s: rnd(1.6, 3) }); }
+  else if (quiet) { for (let i = 0; i < 3; i++) particles.push({ t: 'snow', x: hx, y: hy, vx: rnd(-1.2, 1.2), vy: rnd(-1.5, -.2), life: 24, max: 24, s: rnd(1, 2) }); }
   else for (let i = 0, n = 2 + (Math.random() * 4 | 0); i < n; i++) particles.push({ t: 'blood', x: hx, y: hy, vx: dirx * rnd(1, 3) + rnd(-.6, .6), vy: diry * rnd(1, 2.5) + rnd(-1.5, 0.3), life: 70, max: 70, s: rnd(1.5, 2) });
   if (t === player) shakeAmt = Math.max(shakeAmt, 3);
   if (src === player && t !== player) { sfxHit(); hitMarker = 8; }
@@ -1656,7 +1790,7 @@ function killFx(t, src, wname, hx, hy, dirx) {
   if (src === player && t !== player) {
     player.streak = tick - player.lastKillT < 180 ? player.streak + 1 : 1; player.lastKillT = tick;
     bigMsg = { text: player.streak === 2 ? 'DOUBLE KILL' : player.streak === 3 ? 'TRIPLE KILL' : player.streak > 3 ? 'MULTI KILL' : `Você matou ${t.name}`, t: 240 };
-  } else if (t === player) bigMsg = { text: src === t ? (wname === MAP.pitName ? MAP.pitMsg : wname === 'Gelo' ? 'Esmagado pelo gelo' : wname === 'Rocha' ? 'Esmagado por uma rocha' : wname === 'Lava' ? 'Derreteu na lava' : 'Você se explodiu') : `Morto por ${src ? src.name : '?'}`, t: 240 };
+  } else if (t === player) bigMsg = { text: src === t ? (wname === MAP.pitName ? MAP.pitMsg : wname === 'Gelo' ? 'Esmagado pelo gelo' : wname === 'Rocha' ? 'Esmagado por uma rocha' : wname === 'Cristal' ? 'Esmagado por um cristal' : wname === 'Lava' ? 'Derreteu na lava' : 'Você se explodiu') : `Morto por ${src ? src.name : '?'}`, t: 240 };
 }
 
 // Verlet ragdoll: 11 points joined by sticks, colliding with the terrain mask (Soldat corpses are skeletons too)
@@ -1732,6 +1866,7 @@ function impactFx(x, y, vx, vy) {
 function explode(x, y, r, mult, src, wname) {
   boomFx(x, y, r); emit({ t: 'boom', x, y, r });
   for (const k of CRATES) if (k.alive) { const d = Math.hypot(k.x - x, k.y - 12 - y); if (d < r) damageCrate(k, mult / (d + 1)); }
+  for (const q of walls.slice()) { const d = Math.hypot(q.x + q.w / 2 - x, q.y + q.h / 2 - y); if (d < r + Math.max(q.w, q.h) / 2) hurtWall(q, mult / (d + 1) * 3); }
   for (const c of ICICLES) if (c.state === 0 && Math.hypot(c.x - x, c.y + c.len / 2 - y) < r * 1.3) { c.state = 1; c.vy = 0; c.by = src; }
   for (const t of soldiers) {
     if (t.dead) continue;
@@ -1759,11 +1894,13 @@ function updateBullets() {
       b.x += b.vx / steps; b.y += b.vy / steps;
       if (b.x < -50 || b.x > W + 50 || b.y > H + 50 || b.y < -800) { dead = true; break; }
       if (solid(b.x, b.y)) {
-        const px = b.x - b.vx / steps, py = b.y - b.vy / steps;
+        const px = b.x - b.vx / steps, py = b.y - b.vy / steps, wq = wallAt(b.x, b.y);
+        if (wq && !b.w.explosive && kind !== 'portal' && kind !== 'blackhole') hurtWall(wq, Math.hypot(b.vx, b.vy) * (b.w.mult || 0) * 1.3);
         if (kind === 'portal') placePortal(b.owner, b.x, b.y);
         else if (kind === 'blackhole') openHole(px, py, b.owner);
         else if (b.w.explosive) explode(px, py, b.w.explosive.r, b.w.mult, b.owner, b.w.short);
         else if (kind === 'cryo') particles.push({ t: 'snow', x: b.x, y: b.y, vx: rnd(-1, 1), vy: rnd(-1.5, -.3), life: 20, max: 20, s: 1.4 });
+        else if (kind === 'flame') particles.push({ t: 'fire', x: b.x, y: b.y, vx: rnd(-1, 1), vy: rnd(-1.2, -.2), life: 14, max: 14, s: 2.4 });
         else { impactFx(b.x, b.y, b.vx, b.vy); emit({ t: 'imp', x: b.x, y: b.y, vx: b.vx, vy: b.vy }); }
         dead = true; break;
       }
@@ -1778,6 +1915,7 @@ function updateBullets() {
         const [w, h] = dims(t);
         if (b.x > t.x - w / 2 - 1.5 && b.x < t.x + w / 2 + 1.5 && b.y > t.y - h - 1.5 && b.y < t.y + 1) {
           if (kind === 'cryo') chillHit(t, b);
+          else if (kind === 'flame') flameHit(t, b);
           else if (kind === 'blackhole') openHole(b.x, b.y, b.owner);
           else if (b.w.explosive) explode(b.x, b.y, b.w.explosive.r, b.w.mult, b.owner, b.w.short);
           else {
@@ -1924,7 +2062,7 @@ function playerInput() {
   inp.jet = mouse.right || !!keys.Space; inp.jetPressed = !!(pressed.jet || pressed.Space); inp.fire = mouse.left; inp.firePressed = !!pressed.fire;
   inp.jumpPressed = !!pressed.KeyW; inp.pronePressed = !!(pressed.KeyX || pressed.KeyC);
   inp.reload = !!keys.KeyR; inp.grenadePressed = !!pressed.KeyE; inp.grenadeHeld = !!keys.KeyE;
-  inp.jumpHeld = !!keys.KeyW; inp.knifePressed = !!pressed.KeyF; inp.potionPressed = !!pressed.KeyV; inp.swapPressed = !!pressed.KeyQ;
+  inp.jumpHeld = !!keys.KeyW; inp.knifePressed = !!pressed.KeyF; inp.potionPressed = !!pressed.KeyV; inp.swapPressed = !!pressed.KeyQ; inp.flagPressed = !!pressed.KeyG;
   if (menuOpen) { inp.fire = false; inp.firePressed = false; }
   inp.aimX = cam.x - SW / 2 / Z + mouse.x / Z; inp.aimY = cam.y - SH / 2 / Z + mouse.y / Z;
   // recoil kick nudges aim upward a little
@@ -1941,6 +2079,7 @@ function playerInput() {
 // ================= Living world: icicles, crates, pickups, lanterns, wind, footprints =================
 // Icicles, crates and pickups change the match, so the host owns them; lanterns, wind, fog and footprints are local visuals.
 const ICICLES = [], CRATES = [], LANTERNS = [], pickups = [];
+const ICE_NAME = VOLCANO || MAP_ID === 'selva' ? 'Rocha' : MAP_ID === 'espaco' ? 'Cristal' : 'Gelo'; // what falls from the ceiling on this map
 const PICKUP_KINDS = ['health', 'ammo', 'grenades', 'vest', 'fuel', 'potion'];
 const CRATE_DROPS = ['health', 'grenades', 'vest', 'potion']; // ammo and jet fuel refill on respawn anyway, so crates no longer hold them
 let wind = 0, gustT = 400, gustDir = 1, gustPow = 1, fogX = 0;
@@ -1949,15 +2088,14 @@ function groundBelow(x, y) { let yy = y; while (yy < H && !solid(x, yy)) yy++; r
 function buildLivingWorld() {
   const rng = mulberry(777); // own seed: host and guest must place the same objects
   const cands = [];
-  for (let x = 40; x < W - 40; x += 6) for (let y = 300; y < 1250; y++) {
+  for (let x = 40; x < W - 40; x += 6) for (let y = ARENA ? 60 : 300; y < Math.min(1250, H - 20); y++) {
     const i = y * W + x;
     if (mask[i] === ROCK && !mask[i + W] && openBelow(x, y, 90)) cands.push([x, y + 1]);
   }
   for (let i = cands.length - 1; i > 0; i--) { const j = rng() * (i + 1) | 0; [cands[i], cands[j]] = [cands[j], cands[i]]; }
-  if (ARENA) cands.length = 0; // no icicles on the arenas
   for (const [x, y] of cands) {
-    if (ICICLES.length >= 22) break;
-    if (ICICLES.some(c => Math.hypot(c.x - x, c.y - y) < 70)) continue;
+    if (ICICLES.length >= (ARENA ? 34 : 60)) break;
+    if (ICICLES.some(c => Math.hypot(c.x - x, c.y - y) < 42)) continue;
     ICICLES.push({ x, y, len: 14 + rng() * 12, w: 3.5 + rng() * 2, state: 0, dy: 0, vy: 0, regrow: 0, by: null });
   }
   for (const [cx, cy] of MAP.crates) {
@@ -1978,7 +2116,7 @@ function updateLivingWorld() {
       for (const t of soldiers) {
         if (t.dead) continue;
         const [w, h] = dims(t);
-        if (Math.abs(t.x - tipX) < w / 2 + c.w && tipY > t.y - h && tipY - c.len < t.y) { hurt(t, 60 + c.vy * 12, c.by || t, VOLCANO ? 'Rocha' : 'Gelo', tipX, tipY, 0, 1); shatter(c); break; }
+        if (Math.abs(t.x - tipX) < w / 2 + c.w && tipY > t.y - h && tipY - c.len < t.y) { hurt(t, 60 + c.vy * 12, c.by || t, ICE_NAME, tipX, tipY, 0, 1); shatter(c); break; }
       }
       if (c.state === 1 && solid(tipX, tipY)) shatter(c);
     } else if (c.state === 2 && --c.regrow <= 0) { c.state = 0; c.dy = 0; c.vy = 0; c.by = null; }
@@ -2107,6 +2245,8 @@ function drawLivingWorld() {
     if (len < 1) continue;
     const g = ctx.createLinearGradient(0, y, 0, y + len);
     if (VOLCANO) { g.addColorStop(0, 'rgba(46,34,36,.98)'); g.addColorStop(.7, 'rgba(74,44,36,.96)'); g.addColorStop(1, 'rgba(255,120,40,.9)'); }
+    else if (MAP_ID === 'selva') { g.addColorStop(0, 'rgba(60,78,48,.98)'); g.addColorStop(.7, 'rgba(48,66,40,.96)'); g.addColorStop(1, 'rgba(120,170,90,.8)'); }
+    else if (MAP_ID === 'espaco') { g.addColorStop(0, 'rgba(150,230,255,.95)'); g.addColorStop(.7, 'rgba(100,170,255,.9)'); g.addColorStop(1, 'rgba(190,150,255,.7)'); }
     else { g.addColorStop(0, 'rgba(235,246,255,.98)'); g.addColorStop(.7, 'rgba(190,220,255,.9)'); g.addColorStop(1, 'rgba(160,200,255,.5)'); }
     ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(c.x - c.w, y - 1); ctx.lineTo(c.x + c.w, y - 1); ctx.lineTo(c.x + c.w * .15, y + len); ctx.lineTo(c.x - c.w * .1, y + len * .97); ctx.fill();
     ctx.fillStyle = VOLCANO ? 'rgba(255,140,70,.3)' : 'rgba(255,255,255,.7)'; ctx.fillRect(c.x - c.w * .5, y, .8, len * .55);
@@ -2256,6 +2396,10 @@ function updateDove() {
     if (Math.abs(t.x - dove.x) < 12 && dove.y > t.y - h - 6 && dove.y < t.y + 6) { dove.carrier = t; announce(`${t.name} pegou a pomba de ouro!`); break; }
   }
 }
+function propFx() {
+  for (const f of FIRE_SPOTS) if (Math.random() < .55) particles.push({ t: 'fire', x: f.x + rnd(-4, 4), y: f.y - rnd(0, 3), vx: rnd(-.2, .2), vy: rnd(-1.3, -.5), life: rnd(14, 26), max: 26, s: rnd(2, 3.8) });
+  if (BEACONS.length && tick % 40 === 0) for (const b of BEACONS) particles.push({ t: 'ring', x: b.x, y: b.y, life: 14, max: 14, s: 10, col: '120,230,255' });
+}
 function doveFx() {
   if (gameMode !== 'dove' || tick % 3) return;
   particles.push({ t: 'vort', cx: dove.x, cy: dove.y, a: rnd(0, 6.28), r: rnd(3, 9), w: .35, life: 16, max: 16, col: '255,215,90' });
@@ -2279,8 +2423,16 @@ function resetCtf() {
   for (const q of soldiers) { if (q.isBot || netMode === 'solo' && q !== player) setTeam(q, 1); else if (q === player) setTeam(q, 0); else setTeam(q, balancedTeam()); }
   for (const q of soldiers) { ctfPlace(q); q.hp = MAX_HEALTH; q.dead = false; }
 }
-function returnFlag(f) { f.x = f.home.x; f.y = f.home.y; f.vy = 0; f.carrier = null; f.atHome = true; f.dropT = 0; }
-function dropFlag(f, x, y) { f.carrier = null; f.atHome = false; f.dropT = 900; if (x != null) { f.x = x; f.y = y; } f.vy = -2; }
+function returnFlag(f) { f.x = f.home.x; f.y = f.home.y; f.vx = f.vy = 0; f.carrier = null; f.atHome = true; f.dropT = 0; f.noPick = 0; }
+// G: throw the flag you carry (to a teammate, or over an obstacle); the thrower cannot grab it again for half a second
+function throwFlag(e) {
+  if (gameMode !== 'ctf' || e.dead || !flags.length) return;
+  const f = flags[1 - e.team]; if (!f || f.carrier !== e) return;
+  const s = shoulder(e), c = Math.cos(e.aim), sn = Math.sin(e.aim);
+  f.carrier = null; f.atHome = false; f.dropT = 900; f.x = s.x + c * 8; f.y = s.y + sn * 8 + 12; f.vx = c * 7.5 + e.vx * .5; f.vy = sn * 7.5 - 1.5 + e.vy * .5; f.noPick = 30; f.thrower = e;
+  e.throwT = 14; noise(.1, 1400, volAt(s.x, s.y) * .4, 'bandpass'); emit({ t: 'kthrow', x: s.x, y: s.y }); announce(`${e.name} jogou a bandeira ${TEAM_NAMES[1 - e.team]}!`);
+}
+function dropFlag(f, x, y) { f.carrier = null; f.atHome = false; f.dropT = 900; if (x != null) { f.x = x; f.y = y; } f.vx = 0; f.vy = -2; f.noPick = 0; }
 function updateCtf() {
   if (gameMode !== 'ctf') return;
   if (!flags.length || flags[0].home.y >= H - 2) initFlags();
@@ -2292,7 +2444,9 @@ function updateCtf() {
       else { f.x = c.x; f.y = c.y; return; }
     }
     if (!f.atHome) {
-      f.vy = Math.min(f.vy + GRAV * 1.4, 5);
+      if (f.noPick > 0) f.noPick--;
+      f.vy = Math.min(f.vy + GRAV * 1.4, 7);
+      if (f.vx) { if (solid(f.x + f.vx, f.y - 6)) f.vx *= -.3; else f.x += f.vx; f.vx *= solid(f.x, f.y + 2) ? .8 : .992; if (Math.abs(f.vx) < .05) f.vx = 0; }
       if (solid(f.x, f.y + f.vy + 1)) f.vy = f.vy > 1.2 ? -f.vy * .3 : 0; else f.y += f.vy;
       if (solid(f.x, f.y)) f.y--;
       if (lavaAt(f.x, f.y) || (MAP.pit && f.y > MAP.pit - 20) || f.y > H - 30) { returnFlag(f); announce(`A bandeira ${TEAM_NAMES[t]} voltou para a base`); return; }
@@ -2302,6 +2456,7 @@ function updateCtf() {
       if (q.dead) continue;
       const [, h] = dims(q);
       if (Math.abs(q.x - f.x) > 13 || f.y - 14 > q.y + 4 || f.y < q.y - h - 4) continue;
+      if (f.noPick > 0 && q === f.thrower) continue;
       if (q.team === t) { if (!f.atHome) { returnFlag(f); announce(`${q.name} devolveu a bandeira ${TEAM_NAMES[t]}`); } }
       else { f.carrier = q; f.atHome = false; announce(`${q.name} pegou a bandeira ${TEAM_NAMES[t]}!`); break; }
     }
@@ -2336,11 +2491,11 @@ function step() {
   // remote players: latest held keys + one-shot presses accumulated since the last tick
   for (const s of soldiers) if (s.remote) {
     const i = s.netIn || {}, a = s.acc || {};
-    s.input = { ...i, jumpPressed: !!a.jumpPressed, pronePressed: !!a.pronePressed, firePressed: !!a.firePressed, grenadePressed: !!a.grenadePressed, crouchPressed: !!a.crouchPressed, knifePressed: !!a.knifePressed, jetPressed: !!a.jetPressed, swapPressed: !!a.swapPressed, potionPressed: !!a.potionPressed, setSec: a.setSec != null ? a.setSec : null, switchTo: a.switchTo != null ? a.switchTo : null };
+    s.input = { ...i, jumpPressed: !!a.jumpPressed, pronePressed: !!a.pronePressed, firePressed: !!a.firePressed, grenadePressed: !!a.grenadePressed, crouchPressed: !!a.crouchPressed, knifePressed: !!a.knifePressed, jetPressed: !!a.jetPressed, swapPressed: !!a.swapPressed, potionPressed: !!a.potionPressed, flagPressed: !!a.flagPressed, setSec: a.setSec != null ? a.setSec : null, switchTo: a.switchTo != null ? a.switchTo : null };
     s.acc = {};
   }
   for (const s of soldiers) { updateSoldier(s); groundFx(s); }
-  updateBullets(); updateMolotovs(); updateHoles(); updatePortals(); updateFires(); updateKnives(); updateBoomerangs(); updateLivingWorld(); updateDove(); updateCtf(); updateParticles();
+  updateBullets(); updateWalls(); updateMolotovs(); updateHoles(); updatePortals(); updateFires(); updateKnives(); updateBoomerangs(); updateLivingWorld(); updateDove(); updateCtf(); updateParticles();
   frameTail();
   if (netMode === 'host') hostSend(); // every tick: halves the delay between what the host sees and what guests see
 }
@@ -2350,7 +2505,7 @@ function frameTail() {
   if (bigMsg) bigMsg.t--;
   shakeAmt *= 0.86;
   updateWind(); updateLanterns(); if (VOLCANO) lavaFx();
-  trailFx(); fireFx(); holeVisualFx(); chargeFx(); doveFx();
+  trailFx(); fireFx(); holeVisualFx(); chargeFx(); doveFx(); propFx();
   // camera: follow player and lean toward the mouse, Soldat-style
   const p = player, tx = p.x + (mouse.x - SW / 2) / Z * 0.45, ty = p.y - 15 + (mouse.y - SH / 2) / Z * 0.45;
   cam.x += (tx - cam.x) * 0.14; cam.y += (ty - cam.y) * 0.14;
@@ -2431,16 +2586,19 @@ function drawBackground() {
     }
     if (L.bottom && y + th < SH) {
       if (VOLCANO && L.key) {
-        // below the painted layer: its own reflection, upside down and sinking into the dark, so the lower screen still shows the landscape
-        const ext = SH - (y + th) + 1;
-        ctx.fillStyle = L.bottom; ctx.fillRect(0, y + th - 1, SW, ext);
-        ctx.save(); ctx.beginPath(); ctx.rect(0, y + th - 1, SW, ext); ctx.clip();
-        for (let i = 0, x = idx * tw - scroll; x < SW; i++, x += tw) {
-          if (L.mirror && (idx + i) % 2) { ctx.save(); ctx.translate(x + tw, y + th * 2 - 1); ctx.scale(-1, -1); ctx.drawImage(img, 0, 0, tw + 1, th); ctx.restore(); }
-          else { ctx.save(); ctx.translate(x, y + th * 2 - 1); ctx.scale(1, -1); ctx.drawImage(img, 0, 0, tw + 1, th); ctx.restore(); }
+        // below the painted layer: a dark cave wall (the basalt texture, sunk into shadow, with a faint lava glow from below)
+        const ext = SH - (y + th) + 1, top = y + th - 1;
+        ctx.fillStyle = L.bottom; ctx.fillRect(0, top, SW, ext);
+        if (L.key === 'bg-mid' && ready(IMG.rock)) {
+          ctx.save(); ctx.beginPath(); ctx.rect(0, top, SW, ext); ctx.clip();
+          const pat = ctx.createPattern(IMG.rock, 'repeat'), k = Z * 376 / IMG.rock.naturalWidth;
+          pat.setTransform(new DOMMatrix([k, 0, 0, k, -cam.x * L.f * Z, top - cam.y * L.f * Z * .5]));
+          ctx.globalAlpha = .5; ctx.fillStyle = pat; ctx.fillRect(0, top, SW, ext); ctx.globalAlpha = 1;
+          const gdn = ctx.createLinearGradient(0, top, 0, top + ext); gdn.addColorStop(0, 'rgba(14,3,3,.55)'); gdn.addColorStop(1, 'rgba(8,2,2,.94)');
+          ctx.fillStyle = gdn; ctx.fillRect(0, top, SW, ext);
+          const gl = ctx.createLinearGradient(0, top, 0, SH); gl.addColorStop(0, 'rgba(255,90,20,.16)'); gl.addColorStop(1, 'rgba(255,90,20,0)');
+          ctx.fillStyle = gl; ctx.fillRect(0, top, SW, ext); ctx.restore();
         }
-        const gdn = ctx.createLinearGradient(0, y + th - 1, 0, y + th * 1.7); gdn.addColorStop(0, 'rgba(14,3,3,.3)'); gdn.addColorStop(1, 'rgba(14,3,3,.94)');
-        ctx.fillStyle = gdn; ctx.fillRect(0, y + th - 1, SW, ext); ctx.restore();
       } else { ctx.fillStyle = L.bottom; ctx.fillRect(0, y + th - 1, SW, SH - y - th + 1); }
     }
     if (L.key === 'bg-mid' && !VOLCANO && !ARENA) drawFog(y + L.row * sc * Z);
@@ -2460,7 +2618,7 @@ function drawWorld() {
   ctx.setTransform(DPR * Z, 0, 0, DPR * Z, -camX * DPR * Z, -camY * DPR * Z);
   const x0 = Math.max(0, Math.floor(camX) - 2), y0 = Math.max(0, Math.floor(camY) - 2);
   const ww = Math.min(W - x0, Math.ceil(vw) + 6), hh = Math.min(H - y0, Math.ceil(vh) + 6);
-  if (ww > 0 && hh > 0) ctx.drawImage(worldCanvas, x0, y0, ww, hh, x0, y0, ww, hh);
+  if (ww > 0 && hh > 0) ctx.drawImage(worldCanvas, x0 * WS, y0 * WS, ww * WS, hh * WS, x0, y0, ww, hh);
   // stuck particles (blood, shells) first
   for (const p of particles) if (p.t === 'blood') { ctx.globalAlpha = Math.min(.85, p.life / 40); ctx.fillStyle = p.stuck ? '#7a1a14' : '#b42a22'; ctx.beginPath(); ctx.arc(p.x, p.y, p.s / 2, 0, 7); ctx.fill(); }
   for (const p of particles) if (p.t === 'gore') { const k = p.life / p.max; ctx.globalAlpha = .75 * Math.min(1, k * 2); const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.s); g.addColorStop(0, '#d23c1e'); g.addColorStop(.6, 'rgba(180,42,34,.7)'); g.addColorStop(1, 'rgba(150,30,25,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, 7); ctx.fill(); }
@@ -2474,6 +2632,7 @@ function drawWorld() {
   drawBoomerangs();
   drawPortals();
   drawMolotovs();
+  drawWalls();
   for (const s of soldiers) if (s.dead) drawSoldier(s);
   for (const s of soldiers) if (!s.dead) drawSoldier(s);
   drawDove();
@@ -2501,6 +2660,7 @@ function drawWorld() {
     const bk = b.w.kind;
     if (bk === 'rocket') { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.atan2(b.vy, b.vx)); ctx.fillStyle = 'rgba(255,215,150,.95)'; ctx.fillRect(-5, -1.3, 10, 2.6); ctx.fillStyle = 'rgba(255,120,40,.9)'; ctx.beginPath(); ctx.moveTo(-5, -1.8); ctx.lineTo(-11 - rnd(0, 3), 0); ctx.lineTo(-5, 1.8); ctx.fill(); ctx.restore(); continue; }
     if (bk === 'portal') { const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 7); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(120,190,255,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, 7); ctx.fill(); continue; }
+    if (bk === 'flame') { const fl = Math.hypot(b.x - b.sx, b.y - b.sy), r = 2.2 + Math.min(fl, 260) * .035, g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r); g.addColorStop(0, 'rgba(255,240,170,.8)'); g.addColorStop(.5, 'rgba(255,140,40,.5)'); g.addColorStop(1, 'rgba(255,60,10,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 7); ctx.fill(); continue; }
     if (bk === 'cryo') { const fl = Math.hypot(b.x - b.sx, b.y - b.sy); ctx.fillStyle = 'rgba(180,230,255,.55)'; ctx.beginPath(); ctx.arc(b.x, b.y, 1.2 + Math.min(fl, 300) * .03, 0, 7); ctx.fill(); continue; }
     if (bk === 'blackhole') { const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 9); g.addColorStop(0, 'rgba(210,150,255,1)'); g.addColorStop(1, 'rgba(110,50,230,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, 9, 0, 7); ctx.fill(); continue; }
     if (b.w.explosive) { ctx.fillStyle = '#ffcc66'; ctx.beginPath(); ctx.arc(b.x, b.y, 2.2, 0, 7); ctx.fill(); continue; }
@@ -2665,7 +2825,16 @@ function gunAndArms(sx, sy, la, w, C, e) {
   ctx.save(); ctx.translate(sx, sy); ctx.rotate(la); ctx.translate(throwPose(e) * 5, 0);
   const K = BODY_SCALE, hand = HAND / K, img = IMG[w.img];
   ctx.strokeStyle = C.dark; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(hand + 7, 2); ctx.stroke();
-  if (w.kind === 'boomerang') {
+  if (w.kind === 'flame') {
+    ctx.save(); ctx.translate(hand, 0); ctx.scale(1 / K, 1 / K);
+    ctx.fillStyle = '#2b2f38'; ctx.fillRect(-4, -2.4, 25, 4.8); ctx.fillStyle = '#b3342a'; ctx.beginPath(); ctx.roundRect(-3, -8, 11, 6, 2); ctx.fill();
+    ctx.fillStyle = '#6a7080'; ctx.fillRect(21, -1.6, 7, 3.2); ctx.fillStyle = `rgba(255,170,60,${.6 + .3 * Math.sin(tick * .5)})`; ctx.beginPath(); ctx.arc(29, 0, 1.6, 0, 7); ctx.fill();
+    ctx.restore();
+  } else if (w.kind === 'builder') {
+    ctx.save(); ctx.translate(hand, 0); ctx.scale(1 / K, 1 / K);
+    ctx.fillStyle = '#3b4a63'; ctx.beginPath(); ctx.roundRect(-3, -5, 17, 10, 2); ctx.fill(); ctx.fillStyle = '#9aa6bb'; ctx.fillRect(14, -3, 8, 6); ctx.fillStyle = '#7fe0ff'; ctx.fillRect(1, -3, 5, 2);
+    ctx.restore();
+  } else if (w.kind === 'boomerang') {
     if (e.hasBoom) { ctx.save(); ctx.translate(hand + 2, 0); ctx.rotate(-.6); ctx.scale(1.3 / K, 1.3 / K); drawBoomerangShape(); ctx.restore(); }
   } else if (ready(img)) {
     const gw = img.naturalWidth * PX / K, gh = img.naturalHeight * PX / K;
@@ -2991,21 +3160,44 @@ function drawHUD() {
 }
 
 let planksApplied = false, rockApplied = false;
-const ROCK_SCALE = 0.6; // world units per texture pixel (rock.png is 627 px)
+// Painted rock: up to 4 texture files (basalt.png + basalt-2..4.png, or rock.png + rock-2..4.png). Each tile always covers 376 world units whatever its
+// pixel size, so higher-resolution textures simply look sharper. Extra textures are patched in over soft-edged noise regions so big rock masses do not look tiled.
+const rockSettled = () => ready(IMG.rock) && ['rock2', 'rock3', 'rock4'].every(k => IMG[k] !== undefined);
 function applyRock() {
-  // painted rock clipped to the rock mask, then the generated shading + snow on top
-  const tmp = mkCanvas(W, H), g = tmp.getContext('2d');
-  const pat = g.createPattern(IMG.rock, 'repeat'); pat.setTransform(new DOMMatrix().scale(ROCK_SCALE));
-  g.fillStyle = pat; g.fillRect(0, 0, W, H);
-  g.globalCompositeOperation = 'destination-in'; g.drawImage(ROCK_LAYERS.mask, 0, 0);
-  g.globalCompositeOperation = 'source-over'; g.drawImage(ROCK_LAYERS.overlay, 0, 0);
-  worldCanvas.getContext('2d').drawImage(tmp, 0, 0);
+  // worked in horizontal bands so no single huge temporary canvas is needed
+  const TW = worldCanvas.width, TH = worldCanvas.height, BAND = 512, wg = worldCanvas.getContext('2d');
+  const texs = ['rock', 'rock2', 'rock3', 'rock4'].map(k => IMG[k]).filter(ready);
+  const regions = texs.slice(1).map((img, k) => {
+    const N = makeNoise(128, 31 + k * 17), mc = mkCanvas(96, 48), mg = mc.getContext('2d'), id = mg.createImageData(96, 48);
+    for (let y = 0; y < 48; y++) for (let x = 0; x < 96; x++) {
+      const v = N[((y * 128 / 48) | 0) * 128 + ((x * 128 / 96) | 0)], a = Math.max(0, Math.min(1, (v - .52) / .12)), j = (y * 96 + x) * 4;
+      id.data[j] = id.data[j + 1] = id.data[j + 2] = 255; id.data[j + 3] = a * 255;
+    }
+    mg.putImageData(id, 0, 0); return { img, mc };
+  });
+  const band = mkCanvas(TW, BAND), g = band.getContext('2d'), layer = mkCanvas(TW, BAND), lg = layer.getContext('2d');
+  const fillWith = (c, img, y0) => { const pat = c.createPattern(img, 'repeat'); pat.setTransform(new DOMMatrix().translate(0, -y0).scale(376 / img.naturalWidth * WS)); c.fillStyle = pat; c.fillRect(0, 0, TW, BAND); };
+  wg.save(); wg.setTransform(1, 0, 0, 1, 0, 0); // pixel space (the context carries the WS scale from the bake)
+  for (let y0 = 0; y0 < TH; y0 += BAND) {
+    const bh = Math.min(BAND, TH - y0), sy = y0 / WS, sh = bh / WS;
+    g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, TW, BAND); fillWith(g, texs[0], y0);
+    for (const R of regions) {
+      lg.globalCompositeOperation = 'source-over'; lg.clearRect(0, 0, TW, BAND); fillWith(lg, R.img, y0);
+      lg.globalCompositeOperation = 'destination-in'; lg.imageSmoothingQuality = 'high'; lg.drawImage(R.mc, 0, sy / H * 48, 96, sh / H * 48, 0, 0, TW, bh);
+      g.drawImage(layer, 0, 0);
+    }
+    // keep only the rock mask, then the generated shading (and snow/ash on top)
+    g.globalCompositeOperation = 'destination-in'; g.drawImage(ROCK_LAYERS.mask, 0, sy, W, sh, 0, 0, TW, bh);
+    g.globalCompositeOperation = 'source-over'; g.drawImage(ROCK_LAYERS.overlay, 0, sy, W, sh, 0, 0, TW, bh);
+    wg.drawImage(band, 0, 0, TW, bh, 0, y0, TW, bh);
+  }
+  wg.restore();
   ROCK_LAYERS = null; rockApplied = true;
 }
 function applyPlanks() {
   const img = IMG['wood-planks'], g = worldCanvas.getContext('2d');
   const P = MAP.planks, sy = 515, sh = 724 - 515, h = P.h + 2, tw = img.naturalWidth * h / sh;
-  g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
+  g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip(); // the world context keeps its WS scale, so this is in world units
   for (let x = P.x; x < P.x + P.w; x += tw) g.drawImage(img, 0, sy, img.naturalWidth, sh, x, P.y - 1, tw, h);
   g.fillStyle = VOLCANO ? 'rgba(110,100,96,.9)' : 'rgba(230,238,250,.95)'; g.fillRect(P.x, P.y, P.w, 2);
   g.restore(); planksApplied = true;
@@ -3013,7 +3205,7 @@ function applyPlanks() {
 function render() {
   if (!worldCanvas) { drawBackground(); return; }
   if (!planksApplied && worldCanvas && MAP.planks && ready(IMG['wood-planks'])) applyPlanks();
-  if (!rockApplied && ROCK_LAYERS && ready(IMG.rock)) applyRock();
+  if (!rockApplied && ROCK_LAYERS && rockSettled()) applyRock();
   drawBackground();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = `rgba(0,0,0,${VOLCANO ? .08 : MAP_ID === 'espaco' ? 0 : ARENA ? .2 : .2})`; ctx.fillRect(0, 0, SW, SH); // slightly darker backdrop so it does not blend with the players
   drawWorld();
@@ -3157,7 +3349,7 @@ function onHostData(conn, m) {
     bigMsg = { text: `${name} entrou`, t: 180 }; emit({ t: 'msg', text: `${name} entrou` });
   } else if (m.t === 'in' && conn.soldier) {
     const g = conn.soldier, a = g.acc || (g.acc = {}), i = m.i || {};
-    for (const k of ['jumpPressed', 'pronePressed', 'firePressed', 'grenadePressed', 'crouchPressed', 'knifePressed', 'jetPressed', 'swapPressed', 'potionPressed']) if (i[k]) a[k] = true;
+    for (const k of ['jumpPressed', 'pronePressed', 'firePressed', 'grenadePressed', 'crouchPressed', 'knifePressed', 'jetPressed', 'swapPressed', 'potionPressed', 'flagPressed']) if (i[k]) a[k] = true;
     if (Number.isInteger(i.switchTo) && i.switchTo >= 0 && i.switchTo < WEAPONS.length) a.switchTo = i.switchTo;
     if (Number.isInteger(i.setSec) && i.setSec >= 0 && i.setSec < WEAPONS.length) a.setSec = i.setSec;
     g.netIn = { left: !!i.left, right: !!i.right, crouch: !!i.crouch, jet: !!i.jet, fire: !!i.fire, reload: !!i.reload, grenadeHeld: !!i.grenadeHeld, jumpHeld: !!i.jumpHeld, aimX: +i.aimX || 0, aimY: +i.aimY || 0 };
@@ -3189,6 +3381,7 @@ function hostSend() {
     kn: knives.map(q => [r2(q.x), r2(q.y), r2(q.r), q.fly ? 1 : 0]),
     bm: boomerangs.map(q => [r2(q.x), r2(q.y), r2(q.r), q.fly ? 1 : 0]),
     hl: holes.map(h => [r2(h.x), r2(h.y), h.life]),
+    wl: walls.map(q => [q.x, q.y, q.w, q.h, Math.round(q.hp), q.life]),
     fz: fires.map(f => [r2(f.x), r2(f.y), f.w, f.life]),
     mo: molotovs.map(m => [r2(m.x), r2(m.y), r2(m.r)]),
     po: portals.map(q => [r2(q.x), r2(q.y), r2(q.nx), r2(q.ny), q.owner.id, q.idx]),
@@ -3275,6 +3468,7 @@ function applySnapshot(m) {
     (m.fl || []).forEach((q, i) => { const f = flags[i]; if (!f) return; f.x = q[0]; f.y = q[1]; f.carrier = q[2] ? soldiers.find(z => z.id === q[2]) || null : null; f.atHome = !!q[3]; });
     CTF.score = m.cs || [0, 0]; CTF.target = m.ct || 3; CTF.over = m.co || 0;
   }
+  walls.length = 0; for (const q of m.wl || []) walls.push({ x: q[0], y: q[1], w: q[2], h: q[3], hp: q[4], life: q[5], hitT: 0 });
   holes.length = 0; for (const q of m.hl || []) holes.push({ x: q[0], y: q[1], life: q[2] });
   fires.length = 0; for (const q of m.fz || []) fires.push({ x: q[0], y: q[1], w: q[2], life: q[3] });
   molotovs.length = 0; for (const q of m.mo || []) molotovs.push({ x: q[0], y: q[1], r: q[2], vx: 0, vy: 0 });
@@ -3291,7 +3485,7 @@ function applySnapshot(m) {
   const byId = id => soldiers.find(q => q.id === id);
   for (const ev of m.ev) {
     if (ev.t === 'shot') { const e = byId(ev.id); if (e) shotFx(e, WEAPONS[ev.wi], ev.mx, ev.my, ev.sx, ev.sy, ev.aim); }
-    else if (ev.t === 'hit') hitFx(byId(ev.tgt), byId(ev.src), ev.x, ev.y, ev.dx, ev.dy, ev.q);
+    else if (ev.t === 'hit') hitFx(byId(ev.tgt), byId(ev.src), ev.x, ev.y, ev.dx, ev.dy, ev.q === 2 ? 'fire' : ev.q);
     else if (ev.t === 'kill') killFx(byId(ev.tgt), byId(ev.src), ev.wname, ev.x, ev.y, ev.dx);
     else if (ev.t === 'boom') boomFx(ev.x, ev.y, ev.r);
     else if (ev.t === 'imp') impactFx(ev.x, ev.y, ev.vx, ev.vy);
@@ -3308,6 +3502,7 @@ function applySnapshot(m) {
     else if (ev.t === 'hole') holeFx(ev.x, ev.y);
     else if (ev.t === 'frz') freezeFx(byId(ev.id));
     else if (ev.t === 'potion') potionFx(byId(ev.id), ev.kind);
+    else if (ev.t === 'wall') wallFx(ev.x, ev.y, ev.w, ev.h);
   }
 }
 function guestStep() {
