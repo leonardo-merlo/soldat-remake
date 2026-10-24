@@ -3049,6 +3049,14 @@ addEventListener('keydown', e => { if (e.code === 'Escape' && netMode === 'solo'
 // The host runs the whole simulation; guests send inputs every tick and get a snapshot every 2 ticks,
 // plus events (shots, hits, kills, explosions) to replay the effects locally.
 const PEER_PREFIX = 'soldat-remake-v1-';
+// Two players on different home/mobile networks usually cannot reach each other directly; the free public Open Relay TURN servers
+// (openrelay.metered.ca, public demo credentials) carry the game traffic when the direct path fails. Swap for your own TURN to be independent of them.
+const PEER_OPTS = { config: { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+] } };
 let peer = null, hostConn = null, myId = null, guestN = 0;
 const conns = [];
 const r2 = v => Math.round(v * 100) / 100;
@@ -3060,7 +3068,7 @@ function hostRoom() {
   saveProfile(); applyMode();
   roomId = fixedRoom || Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 24 | 0]).join('');
   roomStatus('Criando sala...');
-  const me = peer = new Peer(PEER_PREFIX + roomId); // handlers use `me`, never the global, so a destroyed peer cannot touch a newer one
+  const me = peer = new Peer(PEER_PREFIX + roomId, PEER_OPTS); // handlers use `me`, never the global, so a destroyed peer cannot touch a newer one
   me.on('open', () => {
     netMode = 'host';
     const bi = soldiers.indexOf(bot); if (bi >= 0) soldiers.splice(bi, 1);
@@ -3141,14 +3149,14 @@ $('join').onclick = () => joinRoom(roomCode);
 // Joining a fixed room: if nobody answers within JOIN_TIMEOUT (stale host, blocked network) the attempt is dropped and, for a fixed room, this
 // player takes the room over as host; after two failed rounds it stops and says so instead of hanging on "Conectando".
 let joinTries = 0;
-const JOIN_TIMEOUT = 12000;
+const JOIN_TIMEOUT = 20000;
 function joinRoom(code) {
   if (!needPeer()) return;
   saveProfile();
   roomStatus('Conectando à sala...');
   $('join').hidden = true;
   netMode = 'guest'; soldiers.length = 0;
-  const me = peer = new Peer();
+  const me = peer = new Peer(undefined, PEER_OPTS);
   let done = false;
   const giveUp = why => {
     if (done) return; done = true; clearTimeout(timer);
