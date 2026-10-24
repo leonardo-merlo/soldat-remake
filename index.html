@@ -3051,13 +3051,11 @@ addEventListener('keydown', e => { if (e.code === 'Escape' && netMode === 'solo'
 // The host runs the whole simulation; guests send inputs every tick and get a snapshot every 2 ticks,
 // plus events (shots, hits, kills, explosions) to replay the effects locally.
 const PEER_PREFIX = 'soldat-remake-v1-';
-// Two players on different home/mobile networks usually cannot reach each other directly; the free public Open Relay TURN servers
-// (openrelay.metered.ca, public demo credentials) carry the game traffic when the direct path fails. Swap for your own TURN to be independent of them.
+// Same ICE servers PeerJS uses by default (Google STUN + the free PeerJS TURN relays). Passing a custom `config` REPLACES the defaults,
+// so they are listed here explicitly: dropping them would break players on different networks.
 const PEER_OPTS = { config: { iceServers: [
-  { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:openrelay.metered.ca:80' },
-  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
 ] } };
 let peer = null, hostConn = null, myId = null, guestN = 0;
 const conns = [];
