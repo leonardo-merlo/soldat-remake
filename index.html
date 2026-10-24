@@ -52,7 +52,7 @@
   <div id="mode-pick"><label>Modo</label><div id="modes"><button data-mode="dm">DEATHMATCH</button><button data-mode="dove">POMBA DE OURO</button><button data-mode="ctf">BANDEIRA</button></div>
     <div id="ctf-opts" hidden><label for="ctf-target">Capturas para vencer</label><input id="ctf-target" type="number" min="1" max="10" value="3"></div></div>
   <button id="join" hidden>ENTRAR NA SALA</button>
-  <div id="fixed-rooms"><label>Salas fixas (mapa Inverno, sem link)</label><div id="rooms"><button id="room1">SALA 1</button><button id="room2">SALA 2</button></div></div>
+  <div id="fixed-rooms"><label>Salas fixas (sem link)</label><div id="rooms"></div></div>
   <button id="play">TREINAR COM BOT</button>
   <button id="host" class="alt">CRIAR SALA (JOGAR COM AMIGO)</button>
   <div id="room" hidden></div>
@@ -3097,22 +3097,31 @@ function joinRoom(code) {
   });
   peer.on('error', err => { $('join').hidden = false; roomStatus(err.type === 'peer-unavailable' ? 'Sala não encontrada. Confira o link ou peça um novo.' : `Erro de conexão (${err.type || err}).`); });
 };
-// fixed rooms: the first to click hosts the code, whoever clicks next joins it (always the winter map, deathmatch)
-const ROOM_CODES = { room1: 'SALAUM', room2: 'SALADO' };
-function enterFixed(code) { selMode = 'dm'; fixedRoom = code; $('fixed-rooms').hidden = true; hostRoom(); }
-for (const [id, code] of Object.entries(ROOM_CODES)) {
-  $(id).onclick = () => {
-    if (MAP_ID !== 'inverno') {
+// fixed rooms: the first to click hosts the code, whoever clicks next joins it.
+// EDIT HERE to change what each room is: map = 'inverno' | 'vulcao' | 'selva' | 'ruinas', mode = 'dm' | 'dove' | 'ctf'.
+// The peer code is derived from room + map + mode, so changing either gives a fresh room that never clashes with an old one.
+const ROOMS = [
+  { label: 'SALA 1', map: 'inverno', mode: 'dm' },
+  { label: 'SALA 2', map: 'inverno', mode: 'dm' },
+];
+const MAP_LABEL = { inverno: 'Inverno', vulcao: 'Vulcão', selva: 'Selva', ruinas: 'Ruínas' }, MODE_LABEL = { dm: 'Deathmatch', dove: 'Pomba de Ouro', ctf: 'Bandeira' };
+ROOMS.forEach((r, i) => { r.code = 'SL' + 'ABCDEFGH'[i] + r.map[0].toUpperCase() + ({ dm: 'D', dove: 'P', ctf: 'C' }[r.mode] || 'D') + 'X'; });
+function enterFixed(r) { selMode = r.mode; fixedRoom = r.code; $('fixed-rooms').hidden = true; hostRoom(); }
+for (const r of ROOMS) {
+  const b = document.createElement('button'); b.innerHTML = `${r.label}<br><small style="font-size:13px;font-weight:600">${MAP_LABEL[r.map]} · ${MODE_LABEL[r.mode]}</small>`;
+  b.onclick = () => {
+    if (MAP_ID !== r.map) {
       saveProfile();
-      try { localStorage.setItem('sr-map', 'inverno'); } catch (err) { /* ignore */ }
-      location.search = '?mapa=inverno&auto=' + code; // the world is built at load, so switching map reloads
+      try { localStorage.setItem('sr-map', r.map); } catch (err) { /* ignore */ }
+      location.search = `?mapa=${r.map}&auto=${r.code}`; // the world is built at load, so switching map reloads
       return;
     }
-    enterFixed(code);
+    enterFixed(r);
   };
+  $('rooms').appendChild(b);
 }
 if (roomCode) $('fixed-rooms').hidden = true;
-{ const auto = new URLSearchParams(location.search).get('auto'); if (MAP_ID === 'inverno' && Object.values(ROOM_CODES).includes(auto)) enterFixed(auto); }
+{ const auto = new URLSearchParams(location.search).get('auto'), r = ROOMS.find(q => q.code === auto); if (r && MAP_ID === r.map) enterFixed(r); }
 function applySnapshot(m) {
   const ids = new Set();
   for (const d of m.s) {
