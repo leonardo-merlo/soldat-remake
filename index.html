@@ -889,7 +889,20 @@ function sfxShot(w, x, y) {
   if (prof) gunSound(prof, x, y, w.double ? 1.25 : 1);
   else noise(.1, 3000, volAt(x, y) * .55);
 }
-function sfxBoom(x, y) { const v = volAt(x, y); noise(.9, 380, v * 1.3); noise(.25, 1600, v * .5); }
+// explosion: sharp crack, big low boom with a long tail in the reverb and echo, flying debris and a deep thump
+function sfxBoom(x, y) {
+  const v = volAt(x, y), far = 1 - v, wet = [[reverbIn, .9 + far], [echoIn, .3 + far * .3]];
+  if (v <= .01) return;
+  noise(.12, 2400, v * .9, 'highpass', wet);
+  noise(1.3, 420, v * 1.6, 'lowpass', wet);
+  noise(.5, 1500, v * .7, 'bandpass', wet);
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+  o.frequency.setValueAtTime(85, t); o.frequency.exponentialRampToValueAtTime(24, t + .8);
+  g.gain.setValueAtTime(v * 1.3, t); g.gain.exponentialRampToValueAtTime(.001, t + .9);
+  o.connect(g); g.connect(master); const sg = AC.createGain(); sg.gain.value = .6; g.connect(sg); sg.connect(reverbIn);
+  o.start(t); o.stop(t + .95);
+}
 function sfxHit() { noise(.05, 4000, .25, 'highpass'); }
 
 // ================= Entities =================
@@ -1259,7 +1272,9 @@ function shoot(e, w) {
   const dev = MAX_INACCURACY * Math.sin(inacc / MAX_INACCURACY * Math.PI / 2);
   let bx = c + (Math.random() * 2 - 1) * dev, by = sn + (Math.random() * 2 - 1) * dev;
   const bl = Math.hypot(bx, by); const own = w.straight && w.kind !== 'cryo' ? 0 : 0.5; bx = bx / bl * w.speed + e.vx * own; by = by / bl * w.speed + e.vy * own;
-  const add = (x, y, vx, vy) => bullets.push({ x, y, sx: x, sy: y, vx, vy, owner: e, w, life: w.life || 420, pcd: 0 });
+  // portal and black hole shots stop where the cursor was (even in mid-air), unless a wall gets in the way first
+  const aimD = Math.max(reach + 6, Math.min(Math.hypot(e.input.aimX - s.x, e.input.aimY - s.y), w.kind === 'portal' ? 1100 : 650)), ttx = s.x + c * aimD, tty = s.y + sn * aimD;
+  const add = (x, y, vx, vy) => bullets.push({ x, y, sx: x, sy: y, vx, vy, owner: e, w, life: w.life || 420, pcd: 0, tx: ttx, ty: tty });
   if (w.double) {
     for (let k = 0; k < 2; k++) add(mx - (k ? Math.sign(bx) * Math.abs(sn) * 3 : 0), my + (k ? Math.sign(by) * Math.abs(c) * 3 : 0), bx + (Math.random() * 2 - 1) * w.spread, by + (Math.random() * 2 - 1) * w.spread);
   } else if (w.pellets) {
@@ -1508,8 +1523,8 @@ function normalAt(x, y) {
   for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; if (!solid(x + Math.cos(a) * 5, y + Math.sin(a) * 5)) { nx += Math.cos(a); ny += Math.sin(a); } }
   const l = Math.hypot(nx, ny); return l < .01 ? [0, -1] : [nx / l, ny / l];
 }
-function placePortal(o, hx, hy) {
-  const [nx, ny] = normalAt(hx, hy), idx = o.portalN++ % 2;
+function placePortal(o, hx, hy, nx0, ny0) { // nx0/ny0: normal for a portal opened in mid-air (faces back at the shooter); otherwise taken from the wall
+  const [nx, ny] = nx0 != null ? [nx0, ny0] : normalAt(hx, hy), idx = o.portalN++ % 2;
   if (idx === 0) for (let i = portals.length - 1; i >= 0; i--) if (portals[i].owner === o) portals.splice(i, 1);
   const x = hx + nx * 2.5, y = hy + ny * 2.5;
   portals.push({ x, y, nx, ny, owner: o, idx });
@@ -1753,6 +1768,10 @@ function updateBullets() {
         else if (b.w.explosive) explode(px, py, b.w.explosive.r, b.w.mult, b.owner, b.w.short);
         else if (kind === 'cryo') particles.push({ t: 'snow', x: b.x, y: b.y, vx: rnd(-1, 1), vy: rnd(-1.5, -.3), life: 20, max: 20, s: 1.4 });
         else { impactFx(b.x, b.y, b.vx, b.vy); emit({ t: 'imp', x: b.x, y: b.y, vx: b.vx, vy: b.vy }); }
+        dead = true; break;
+      }
+      if ((kind === 'portal' || kind === 'blackhole') && b.tx != null && (b.tx - b.x) * b.vx + (b.ty - b.y) * b.vy <= 0) {
+        if (kind === 'portal') { const l = Math.hypot(b.vx, b.vy) || 1; placePortal(b.owner, b.tx, b.ty, -b.vx / l, -b.vy / l); } else openHole(b.tx, b.ty, b.owner);
         dead = true; break;
       }
       if (kind === 'portal') continue;
