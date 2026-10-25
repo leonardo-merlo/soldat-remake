@@ -78,7 +78,7 @@
     <tr><td>F1 (segurar) / F2</td><td>Placar / minimapa</td></tr>
     <tr><td>R</td><td>Recarregar</td></tr>
     <tr><td>B (segurar)</td><td>Construtor de Muros: gira o muro. A silhueta mostra onde ele vai ficar</td></tr>
-    <tr><td>Armas de poder</td><td>Kamehameha/Sabre/Escudo: segurar o botão. Meteoros, Minhoca, Dragão, Mina, Torreta, Clone e Repulsão: um clique</td></tr>
+    <tr><td>Armas de poder</td><td>Kamehameha/Sabre/Escudo: segurar o botão. Meteoros, Minhoca, Fênix, Mina, Torreta, Clone e Repulsão: um clique</td></tr>
     <tr><td>G</td><td>Bandeira: arremessa a bandeira que você carrega (para um colega ou por cima de obstáculos)</td></tr>
     <tr><td>E (segurar e soltar)</td><td>Granada: quanto mais segura, mais longe vai</td></tr>
     <tr><td>Botão esquerdo (segurar)</td><td>Laser/Gravitacional: carregar e soltar. Motosserra e Criogênico: contínuo</td></tr>
@@ -797,7 +797,7 @@ const WEAPONS = [
   { name: 'Barrett M82A1', kick: 2, short: 'Barrett', mult: 4.45, delay: 225, mag: 10, reload: 70, speed: 55, spread: 0, moveAcc: .05, push: .018, mods: [1, 1, 1], auto: false, kind: 'sniper', startup: 19, img: 'barretm82', fire: 'barret-fire', cx: .15, cy: .7, fx: -.15, fy: .8 },
   { name: 'FN Minimi', kick: .08, short: 'Minimi', mult: .85, delay: 9, mag: 50, reload: 250, speed: 27, spread: .064, moveAcc: .013, push: .0128, mods: [1.1, .95, .85], auto: true, img: 'm249', fire: 'm249-fire', cx: .15, cy: .6, fx: -.2, fy: .9 },
   { name: 'XM214 Minigun', kick: .2, short: 'Minigun', mult: .468, delay: 3, mag: 100, reload: 480, speed: 29, spread: .3, moveAcc: .0625, push: .0104, mods: [1.1, .95, .85], auto: true, kind: 'minigun', startup: 25, img: 'minigun', fire: 'minigun-fire', cx: .05, cy: .5, fx: -.2, fy: .45 },
-  { name: 'Bumerangue', kick: 0, short: 'Bumerangue', mult: 0, delay: 20, mag: 1, reload: 1, speed: 9.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'boomerang', img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
+  { name: 'Bumerangue', kick: 0, short: 'Bumerangue', mult: 0, delay: 20, mag: 1, reload: 1, speed: 9.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'boomerang', img: 'boomerang', fire: null, cx: .22, cy: .8, fx: 0, fy: 0 },
   // new arms: sprites sliced from the weapon sheet (assets/weapons/<img>.png), effects drawn by code
   { name: 'Motosserra', kick: 0, short: 'Motosserra', mult: 0, delay: 3, mag: 150, reload: 140, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'chainsaw', noPartial: true, reach: 46, dmg: 400, noShell: true, img: 'chainsaw', fire: null, cx: .3, cy: .55, fx: 0, fy: 0 },
   { name: 'Rifle de Raio Laser', kick: 0, short: 'Laser', mult: 0, delay: 24, mag: 4, reload: 200, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'laser', charge: 90, range: 1500, noShell: true, img: 'laser-rifle', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
@@ -806,23 +806,23 @@ const WEAPONS = [
   { name: 'Foguete Teleguiado', kick: .8, short: 'Teleguiado', mult: 1400, delay: 20, mag: 1, reload: 200, speed: 7, spread: 0, moveAcc: 0, push: 0, mods: [1.15, 1, .9], auto: false, kind: 'rocket', explosive: { r: 72 }, straight: true, life: 320, noShell: true, img: 'rocket-launcher', fire: null, cx: .3, cy: .66, fx: 0, fy: 0 },
   { name: 'Arma de Portais', kick: .1, short: 'Portais', mult: 0, delay: 14, mag: 8, reload: 60, speed: 34, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'portal', straight: true, life: 90, noShell: true, img: 'portal-gun', fire: null, cx: .25, cy: .6, fx: 0, fy: 0 },
   { name: 'Congelador Criogênico', kick: 0, short: 'Criogênico', mult: 0, delay: 2, mag: 110, reload: 170, speed: 11.5, spread: .22, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'cryo', noPartial: true, straight: true, life: 42, noShell: true, img: 'cryo-gun', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
-  { name: 'Lança-chamas', kick: 0, short: 'Lança-chamas', mult: 0, delay: 2, mag: 140, reload: 200, speed: 8.5, spread: .2, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'flame', noPartial: true, straight: true, life: 34, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
-  { name: 'Construtor de Muros', kick: 0, short: 'Construtor', mult: 0, delay: 18, mag: 3, reload: 220, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'builder', range: 170, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
+  { name: 'Lança-chamas', kick: 0, short: 'Lança-chamas', mult: 0, delay: 2, mag: 140, reload: 200, speed: 8.5, spread: .2, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'flame', noPartial: true, straight: true, life: 34, noShell: true, img: 'flamethrower', fire: null, cx: .2, cy: .72, fx: 0, fy: 0 },
+  { name: 'Construtor de Muros', kick: 0, short: 'Construtor', mult: 0, delay: 18, mag: 3, reload: 220, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'builder', range: 170, noShell: true, img: 'wall-builder', fire: null, cx: .2, cy: .7, fx: 0, fy: 0 },
   { name: 'Lançador de Buraco Negro', kick: .5, short: 'Buraco Negro', mult: 0, delay: 30, mag: 1, reload: 300, speed: 6.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'blackhole', straight: true, life: 110, noShell: true, img: 'blackhole-gun', fire: null, cx: .25, cy: .6, fx: 0, fy: 0 },
 ];
 { // the power arms share their boring fields
   const P = o => ({ kick: 0, mult: 0, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0, ...o });
   WEAPONS.push(
-    P({ name: 'Kamehameha', short: 'Kamehameha', delay: 30, mag: 2, reload: 240, kind: 'kame', charge: 120 }),
-    P({ name: 'Sabre de Luz', short: 'Sabre', delay: 10, mag: 240, reload: 180, kind: 'saber' }),
-    P({ name: 'Chuva de Meteoros', short: 'Meteoros', delay: 30, mag: 1, reload: 480, kind: 'meteor' }),
-    P({ name: 'Buraco de Minhoca', short: 'Minhoca', delay: 20, mag: 4, reload: 200, kind: 'wormhole' }),
-    P({ name: 'Dragão de Fogo', short: 'Dragão', delay: 30, mag: 1, reload: 600, kind: 'dragon' }),
-    P({ name: 'Mina de Proximidade', short: 'Mina', delay: 20, mag: 3, reload: 300, kind: 'mine' }),
-    P({ name: 'Torreta Portátil', short: 'Torreta', delay: 30, mag: 2, reload: 420, kind: 'turret' }),
-    P({ name: 'Escudo de Energia', short: 'Escudo', delay: 10, mag: 300, reload: 200, kind: 'shield' }),
-    P({ name: 'Clone Holográfico', short: 'Clone', delay: 30, mag: 2, reload: 360, kind: 'clone' }),
-    P({ name: 'Onda de Repulsão', short: 'Repulsão', delay: 25, mag: 3, reload: 240, kind: 'repulse' }),
+    P({ name: 'Kamehameha', short: 'Kamehameha', delay: 30, mag: 2, reload: 240, kind: 'kame', charge: 120, img: 'kamehameha', cx: .2, cy: .72 }),
+    P({ name: 'Sabre de Luz', short: 'Sabre', delay: 10, mag: 240, reload: 180, kind: 'saber', img: 'saber', cx: .3, cy: .5 }),
+    P({ name: 'Chuva de Meteoros', short: 'Meteoros', delay: 30, mag: 1, reload: 480, kind: 'meteor', img: 'meteor-launcher', cx: .2, cy: .72 }),
+    P({ name: 'Buraco de Minhoca', short: 'Minhoca', delay: 20, mag: 4, reload: 200, kind: 'wormhole', img: 'wormhole-gun', cx: .2, cy: .72 }),
+    P({ name: 'Fênix de Fogo', short: 'Fênix', delay: 30, mag: 1, reload: 600, kind: 'dragon', img: 'phoenix-staff', cx: .3, cy: .62 }),
+    P({ name: 'Mina de Proximidade', short: 'Mina', delay: 20, mag: 3, reload: 300, kind: 'mine', img: 'mine', cx: .5, cy: .55, scale: .55 }),
+    P({ name: 'Torreta Portátil', short: 'Torreta', delay: 30, mag: 2, reload: 420, kind: 'turret', img: 'turret', cx: .5, cy: .6, scale: .42 }),
+    P({ name: 'Escudo de Energia', short: 'Escudo', delay: 10, mag: 300, reload: 200, kind: 'shield', img: 'shield-emitter', cx: .2, cy: .5, scale: .8 }),
+    P({ name: 'Clone Holográfico', short: 'Clone', delay: 30, mag: 2, reload: 360, kind: 'clone', img: 'hologram-projector', cx: .5, cy: .6, scale: .7 }),
+    P({ name: 'Onda de Repulsão', short: 'Repulsão', delay: 25, mag: 3, reload: 240, kind: 'repulse', img: 'repulse-cannon', cx: .2, cy: .7 }),
   );
 }
 const GRENADE = { mult: 1500, r: 85, fuse: 180 };
@@ -869,6 +869,7 @@ if (!ARENA) {
   for (const k of [2, 3, 4]) loadImage('rock' + k, [`${rb}-${k}.png`], 1); // optional extra textures: missing files are simply skipped
 }
 if (VOLCANO) loadImage('dead-tree', ['assets/props/dead-tree.png'], 1);
+loadImage('phoenix', ['assets/props/phoenix.png'], 1);
 for (const k of ['pine-large', 'pine-medium', 'pine-small', 'lamp', 'crate', 'rock-small', 'sandbags', 'barrel', 'fence', 'signpost', 'tent', 'watchtower', 'lantern-hang', 'pk-health', 'pk-ammo', 'pk-grenades', 'pk-vest', 'pk-fuel', 'pk-potion']) loadImage(k, [`assets/props/${k}.png`]);
 for (let i = 1; i <= 16; i++) loadImage('explode' + i, [`assets/fx/explode${i}.png`, `assets/original/fx/explode${i}.png`]);
 const ready = img => img && img.complete && img.naturalWidth > 0;
@@ -1016,7 +1017,7 @@ function shoulder(e) {
   return { x: e.x, y: e.y - 16 };
 }
 const HAND = 4; // grip distance from the shoulder along the aim line
-function gunLength(w) { const img = IMG[w.img]; return ready(img) ? img.naturalWidth * PX * (1 - w.cx) : 20; }
+function gunLength(w) { const img = IMG[w.img]; return ready(img) ? img.naturalWidth * PX * (w.scale || 1) * (1 - w.cx) : 20; }
 
 function moveSoldier(e) {
   const [w, h] = dims(e);
@@ -1269,6 +1270,8 @@ function updateBoomerangs() {
   }
 }
 function drawBoomerangShape() {
+  const bi = IMG.boomerang;
+  if (ready(bi)) { ctx.drawImage(bi, -7.5, -7.5 * bi.naturalHeight / bi.naturalWidth, 15, 15 * bi.naturalHeight / bi.naturalWidth); return; }
   ctx.fillStyle = '#8a5a2e'; ctx.strokeStyle = '#4a2e14'; ctx.lineWidth = .6;
   ctx.beginPath(); ctx.moveTo(-7, 3); ctx.quadraticCurveTo(-3, -4, 0, -2.2); ctx.quadraticCurveTo(3, -4, 7, 3); ctx.lineTo(5.4, 3.8); ctx.quadraticCurveTo(2.5, -1, 0, .2); ctx.quadraticCurveTo(-2.5, -1, -5.4, 3.8); ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#c9883f'; ctx.fillRect(-.8, -2, 1.6, 1.6);
@@ -1800,7 +1803,7 @@ function damageDeployable(d, dmg, src) {
   if (d.hp <= 0) {
     const list = turrets.includes(d) ? turrets : dragons;
     const i = list.indexOf(d); if (i >= 0) list.splice(i, 1);
-    explode(d.x, d.y, 28, 260, src || d.owner, list === turrets ? 'Torreta' : 'Dragão');
+    explode(d.x, d.y, 28, 260, src || d.owner, list === turrets ? 'Torreta' : 'Fênix');
   }
 }
 function popClone(c) { const i = clones.indexOf(c); if (i < 0) return; clones.splice(i, 1); fxRing(c.x, c.y - 12, 22, '200,230,255'); for (let k = 0; k < 10; k++) particles.push({ t: 'smoke', x: c.x + rnd(-5, 5), y: c.y - rnd(0, 22), vx: rnd(-1, 1), vy: rnd(-1.2, -.2), life: 30, max: 30, s: 2.5 }); }
@@ -2075,15 +2078,47 @@ function cloneView(c) {
     gCharge: -1, throwT: 0, hitFlash: 0, flashT: 0, protect: 0, freezeT: 0, chill: 0, buff: '', burnT: 0, dead: false, wi: c.wi, chargeT: 0, beamT: 0, slideT: 0 });
   return f;
 }
+// the phoenix is one painted picture (assets/props/phoenix.png); to make it fly, the two wings are cut out of it once and drawn
+// separately, rotated around their shoulders every frame, over the body with the wings removed
+let PHX = null;
+const PHX_WINGS = {
+  front: [[22, 6], [48, 2], [80, 5], [112, 10], [120, 16], [115, 30], [114, 43], [104, 51], [94, 50], [84, 47], [76, 45], [66, 52], [64, 42], [60, 39], [50, 33], [33, 30], [48, 19], [32, 12]],
+  back: [[112, 34], [128, 25], [148, 20], [166, 24], [148, 30], [138, 37], [128, 40], [118, 43]],
+};
+function phoenixParts() {
+  if (PHX) return PHX;
+  const im = IMG.phoenix; if (!ready(im)) return null;
+  const k = im.naturalWidth / 220, path = (g, poly) => { g.beginPath(); poly.forEach(([x, y], i) => i ? g.lineTo(x * k, y * k) : g.moveTo(x * k, y * k)); g.closePath(); };
+  const mk = () => { const c = mkCanvas(im.naturalWidth, im.naturalHeight); return [c, c.getContext('2d')]; };
+  const [body, bg] = mk(); bg.drawImage(im, 0, 0);
+  const wing = poly => { const [c, g] = mk(); path(g, poly); g.clip(); g.drawImage(im, 0, 0); bg.globalCompositeOperation = 'destination-out'; path(bg, poly); bg.fill(); return c; };
+  PHX = { body, front: wing(PHX_WINGS.front), back: wing(PHX_WINGS.back), k };
+  return PHX;
+}
+function drawPhoenix(D) {
+  const P = phoenixParts(); if (!P) return false;
+  const s = Math.sin(D.flap), lift = s * .55 + .2, k = 46 / 220 / P.k; // 46 world units wide
+  ctx.save(); ctx.translate(D.x, D.y + s * 1.4); ctx.scale(D.face * k, k); ctx.rotate(-.05 + s * .04); ctx.translate(-105 * P.k, -48 * P.k);
+  const flap = (cv, px, py, a) => { ctx.save(); ctx.translate(px * P.k, py * P.k); ctx.rotate(a); ctx.translate(-px * P.k, -py * P.k); ctx.drawImage(cv, 0, 0); ctx.restore(); };
+  flap(P.back, 118, 43, -lift * .8); flap(P.front, 112, 43, lift);
+  ctx.drawImage(P.body, 0, 0);
+  ctx.restore();
+  return true;
+}
 function drawPowers() {
   for (const c of clones) drawSoldier(cloneView(c));
   for (const m of mines) {
     ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(Math.atan2(m.nx, -m.ny));
+    if (ready(IMG.mine)) { const im = IMG.mine, mw = 17, mh = mw * im.naturalHeight / im.naturalWidth, armed0 = !m.fly && m.armT > 50; ctx.drawImage(im, -mw / 2, -mh + 1, mw, mh); if (armed0 && tick % 30 < 15) { ctx.fillStyle = 'rgba(255,60,60,.9)'; ctx.beginPath(); ctx.arc(0, -mh + 1.5, 1.2, 0, 7); ctx.fill(); } ctx.restore(); continue; }
     ctx.fillStyle = '#2b333c'; ctx.beginPath(); ctx.ellipse(0, 0, 6, 3.4, 0, Math.PI, 0); ctx.fill(); ctx.fillRect(-6, 0, 12, 1.4);
     const armed = !m.fly && m.armT > 50; ctx.fillStyle = armed ? (tick % 30 < 15 ? '#ff4040' : '#702020') : '#8a8f98'; ctx.beginPath(); ctx.arc(0, -2.2, 1.2, 0, 7); ctx.fill();
     ctx.restore();
   }
   for (const T of turrets) {
+    if (ready(IMG.turret)) { // painted turret: mirrored to face where it aims, the barrel direction is shown by the flip only
+      const im = IMG.turret, tw = 30, th = tw * im.naturalHeight / im.naturalWidth, face = Math.cos(T.ang) >= 0 ? 1 : -1;
+      ctx.save(); ctx.translate(T.x, T.y); ctx.rotate(Math.atan2(T.nx, -T.ny)); ctx.scale(face, 1); ctx.drawImage(im, -tw / 2, -th + 1, tw, th); ctx.restore(); continue;
+    }
     ctx.save(); ctx.translate(T.x, T.y); ctx.rotate(Math.atan2(T.nx, -T.ny));
     ctx.fillStyle = '#34402f'; ctx.beginPath(); ctx.ellipse(0, 0, 8, 5, 0, Math.PI, 0); ctx.fill(); ctx.fillRect(-8, 0, 16, 2);
     ctx.restore();
@@ -2092,6 +2127,7 @@ function drawPowers() {
     ctx.restore();
   }
   for (const D of dragons) {
+    if (drawPhoenix(D)) continue;
     ctx.save(); ctx.translate(D.x, D.y); ctx.scale(D.face, 1);
     const fl = Math.sin(D.flap) * 7;
     ctx.fillStyle = '#c8381e'; ctx.beginPath(); ctx.ellipse(0, 0, 9, 5, 0, 0, 7); ctx.fill();                       // body
@@ -2508,7 +2544,7 @@ function playerInput() {
 const ICICLES = [], CRATES = [], LANTERNS = [], pickups = [];
 const ICE_NAME = VOLCANO || MAP_ID === 'selva' ? 'Rocha' : MAP_ID === 'espaco' ? 'Cristal' : 'Gelo'; // what falls from the ceiling on this map
 const PICKUP_KINDS = ['health', 'ammo', 'grenades', 'vest', 'fuel', 'potion'];
-const CRATE_DROPS = ['health', 'grenades', 'vest', 'potion']; // ammo and jet fuel refill on respawn anyway, so crates no longer hold them
+const CRATE_DROPS = ['health', 'health', 'vest', 'potion', 'potion']; // ammo and jet fuel refill on respawn anyway, so crates no longer hold them
 let wind = 0, gustT = 400, gustDir = 1, gustPow = 1, fogX = 0;
 function openBelow(x, y, d) { for (let k = 6; k < d; k += 4) if (solid(x, y + k)) return false; return true; }
 function groundBelow(x, y) { let yy = y; while (yy < H && !solid(x, yy)) yy++; return yy; }
@@ -3256,20 +3292,21 @@ function gunAndArms(sx, sy, la, w, C, e) {
   ctx.save(); ctx.translate(sx, sy); ctx.rotate(la); ctx.translate(throwPose(e) * 5, 0);
   const K = BODY_SCALE, hand = HAND / K, img = IMG[w.img];
   ctx.strokeStyle = C.dark; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(hand + 7, 2); ctx.stroke();
-  if (GADGETS[w.kind]) drawGadgetInHand(w.kind, hand, K);
-  else if (w.kind === 'flame') {
+  if (GADGETS[w.kind] && !ready(img)) drawGadgetInHand(w.kind, hand, K);
+  else if (w.kind === 'flame' && !ready(img)) {
     ctx.save(); ctx.translate(hand, 0); ctx.scale(1 / K, 1 / K);
     ctx.fillStyle = '#2b2f38'; ctx.fillRect(-4, -2.4, 25, 4.8); ctx.fillStyle = '#b3342a'; ctx.beginPath(); ctx.roundRect(-3, -8, 11, 6, 2); ctx.fill();
     ctx.fillStyle = '#6a7080'; ctx.fillRect(21, -1.6, 7, 3.2); ctx.fillStyle = `rgba(255,170,60,${.6 + .3 * Math.sin(tick * .5)})`; ctx.beginPath(); ctx.arc(29, 0, 1.6, 0, 7); ctx.fill();
     ctx.restore();
-  } else if (w.kind === 'builder') {
+  } else if (w.kind === 'builder' && !ready(img)) {
     ctx.save(); ctx.translate(hand, 0); ctx.scale(1 / K, 1 / K);
     ctx.fillStyle = '#3b4a63'; ctx.beginPath(); ctx.roundRect(-3, -5, 17, 10, 2); ctx.fill(); ctx.fillStyle = '#9aa6bb'; ctx.fillRect(14, -3, 8, 6); ctx.fillStyle = '#7fe0ff'; ctx.fillRect(1, -3, 5, 2);
     ctx.restore();
   } else if (w.kind === 'boomerang') {
-    if (e.hasBoom) { ctx.save(); ctx.translate(hand + 2, 0); ctx.rotate(-.6); ctx.scale(1.3 / K, 1.3 / K); drawBoomerangShape(); ctx.restore(); }
+    if (e.hasBoom && ready(img)) { const gw = img.naturalWidth * PX / K, gh = img.naturalHeight * PX / K; ctx.save(); ctx.translate(hand, 0); ctx.drawImage(img, -w.cx * gw, -w.cy * gh, gw, gh); ctx.restore(); }
+    else if (e.hasBoom) { ctx.save(); ctx.translate(hand + 2, 0); ctx.rotate(-.6); ctx.scale(1.3 / K, 1.3 / K); drawBoomerangShape(); ctx.restore(); }
   } else if (ready(img)) {
-    const gw = img.naturalWidth * PX / K, gh = img.naturalHeight * PX / K;
+    const gw = img.naturalWidth * PX / K * (w.scale || 1), gh = img.naturalHeight * PX / K * (w.scale || 1);
     ctx.save(); ctx.translate(hand, 0); ctx.rotate(w.rot || 0); ctx.drawImage(img, -w.cx * gw, -w.cy * gh, gw, gh); ctx.restore();
     const fi = IMG[w.fire];
     if (e.flashT > 0 && ready(fi)) {
