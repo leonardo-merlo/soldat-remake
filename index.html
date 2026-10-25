@@ -242,8 +242,7 @@ symm(CONC, rect(250, 640, 150, 36));
 symm(CONC, rect(300, 760, 170, 34));
 symm(WOOD, rect(470, 985, 800, 14));
 symm(WOOD, rect(690, 957, 34, 28));
-// the central mound: two halves meeting in a valley at the middle
-symm(ROCK, [[1250, 985], [1290, 945], [1370, 925], [1450, 950], [1520, 1000], [1570, 1050], [1600, 1100], [1600, 1300], [1380, 1300], [1240, 1120]]);
+// the middle is left open on purpose: the lower level runs straight from side to side under the floating rocks
 symm(ROCK, [[1330, 690], [1420, 668], [1530, 684], [1580, 724], [1510, 772], [1390, 768]]);
 symm(CONC, rect(820, 640, 170, 18));
 }
@@ -800,7 +799,7 @@ const WEAPONS = [
   { name: 'XM214 Minigun', kick: .2, short: 'Minigun', mult: .468, delay: 3, mag: 100, reload: 480, speed: 29, spread: .3, moveAcc: .0625, push: .0104, mods: [1.1, .95, .85], auto: true, kind: 'minigun', startup: 25, img: 'minigun', fire: 'minigun-fire', cx: .05, cy: .5, fx: -.2, fy: .45 },
   { name: 'Bumerangue', kick: 0, short: 'Bumerangue', mult: 0, delay: 20, mag: 1, reload: 1, speed: 9.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'boomerang', img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0 },
   // new arms: sprites sliced from the weapon sheet (assets/weapons/<img>.png), effects drawn by code
-  { name: 'Motosserra', kick: 0, short: 'Motosserra', mult: 0, delay: 3, mag: 150, reload: 140, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'chainsaw', noPartial: true, reach: 30, dmg: 9, noShell: true, img: 'chainsaw', fire: null, cx: .3, cy: .55, fx: 0, fy: 0 },
+  { name: 'Motosserra', kick: 0, short: 'Motosserra', mult: 0, delay: 3, mag: 150, reload: 140, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: true, kind: 'chainsaw', noPartial: true, reach: 46, dmg: 400, noShell: true, img: 'chainsaw', fire: null, cx: .3, cy: .55, fx: 0, fy: 0 },
   { name: 'Rifle de Raio Laser', kick: 0, short: 'Laser', mult: 0, delay: 24, mag: 4, reload: 200, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'laser', charge: 90, range: 1500, noShell: true, img: 'laser-rifle', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
   { name: 'Molotov', kick: 0, short: 'Molotov', mult: 0, delay: 30, mag: 3, reload: 150, speed: 7.5, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'molotov', noShell: true, rot: Math.PI / 2, img: 'molotov', fire: null, cx: .5, cy: .78, fx: 0, fy: 0 },
   { name: 'Canhão Gravitacional', kick: 0, short: 'Gravitacional', mult: 0, delay: 20, mag: 4, reload: 170, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, kind: 'gravity', charge: 90, noShell: true, img: 'gravity-cannon', fire: null, cx: .22, cy: .6, fx: 0, fy: 0 },
@@ -1058,6 +1057,7 @@ function updateSoldier(e) {
   if (e.buffT > 0 && --e.buffT === 0) e.buff = '';
   if (e.buff === 'regen' && e.hp < MAX_HEALTH) e.hp = Math.min(MAX_HEALTH, e.hp + .25);
   if (e.flingT > 0) e.flingT--;
+  if (e.shieldUp > 0) e.shieldUp--;
   if (e.pullT > 0) e.pullT--;
   if (e.portalCD > 0) e.portalCD--;
   if (e.burnT > 0) {
@@ -1405,7 +1405,7 @@ function sawCut(e, w) {
     const [tw, th] = dims(t);
     for (let k = 0; k <= 4; k++) {
       const x = hp.sx + hp.c * (HAND + 4 + reach * k / 4), y = hp.sy + hp.sn * (HAND + 4 + reach * k / 4);
-      if (Math.abs(x - t.x) < tw / 2 + 4 && y > t.y - th - 3 && y < t.y + 3) {
+      if (Math.abs(x - t.x) < tw / 2 + 10 && y > t.y - th - 9 && y < t.y + 9) { // generous: passing close is enough
         hurt(t, w.dmg, e, w.short, x, y, hp.c, hp.sn); t.vx += hp.c * .12; hitAny = true;
         for (let i = 0; i < 2; i++) particles.push({ t: 'spark', x, y, vx: hp.c * rnd(1, 3) + rnd(-1, 1), vy: rnd(-2, 0), life: rnd(8, 16), max: 16, s: 1 });
         break;
@@ -1783,6 +1783,7 @@ const meteors = [], strikes = [], mines = [], turrets = [], dragons = [], clones
 const GADGETS = { kame: ['#2a4fa8', '#8fd6ff'], saber: ['#4a4f5c', '#9dff9d'], meteor: ['#5a2a14', '#ff8a3a'], wormhole: ['#3a2466', '#c9a0ff'], dragon: ['#5a1a14', '#ff6a3a'], mine: ['#33404a', '#ff5a5a'], turret: ['#3a4a3a', '#9dd07a'], shield: ['#1d3a5a', '#7fd8ff'], clone: ['#44506a', '#d0e6ff'], repulse: ['#4a3a66', '#ffe08a'] };
 const POWER_SHOT = { meteor: 1, wormhole: 1, dragon: 1, mine: 1, turret: 1, clone: 1, repulse: 1 }; // one press, one effect: they go through shoot() and the normal ammo/reload
 const isFoe = (owner, t) => t !== owner && !(gameMode === 'ctf' && owner && t.team === owner.team);
+const DECOY_W = (() => { const m = WEAPONS.find(w => w.short === 'MP5'); return Object.assign({}, m, { mult: 0, push: 0, kick: 0, decoy: true }); })(); // looks like an MP5 round, hurts nobody
 const MP5W = WEAPONS.find(w => w.short === 'MP5'), FLAMEW = WEAPONS.find(w => w.kind === 'flame');
 function fxRing(x, y, s, col) { particles.push({ t: 'ring', x, y, life: 14, max: 14, s, col }); emit({ t: 'rg', x, y, s, col }); }
 function segDist(px, py, S) { const dx = S.x1 - S.x0, dy = S.y1 - S.y0, t = clamp(((px - S.x0) * dx + (py - S.y0) * dy) / (dx * dx + dy * dy || 1), 0, 1); return Math.hypot(px - (S.x0 + dx * t), py - (S.y0 + dy * t)); }
@@ -1868,6 +1869,7 @@ function saberTick(e, w) {
 
 // --- energy shield: hold to raise a half-moon in front of you that swallows bullets, flames and thrown things (not explosions, not beams)
 function shieldTick(e, w) {
+  e.shieldUp = 4; // read by hurt(): anything hitting you from the front while this is up is stopped
   const s = shoulder(e), gone = (x, y) => { for (let k = 0; k < 4; k++) particles.push({ t: 'spark', x, y, vx: rnd(-2, 2), vy: rnd(-2, 2), life: 10, max: 10, s: 1 }); blip(900, 500, .06, .1, 'sine', x, y); };
   const inArc = (x, y) => { const dx = x - s.x, dy = y - s.y, d = Math.hypot(dx, dy); if (d < 10 || d > 38) return false; let da = Math.atan2(dy, dx) - e.aim; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2; return Math.abs(da) < 1.05; };
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -1930,7 +1932,7 @@ function powerShoot(e, w) {
   if (w.kind === 'clone') {
     while (clones.filter(m => m.owner === e).length >= 2) clones.splice(clones.findIndex(m => m.owner === e), 1);
     const f = c >= 0 ? 1 : -1;
-    clones.push({ x: e.x, y: e.y, vx: f * 1.9, vy: 0, facing: f, owner: e, team: e.team, wi: e.wi, life: 480, anim: 0 });
+    clones.push({ x: e.x, y: e.y, vx: f * 1.9, vy: 0, facing: f, owner: e, team: e.team, wi: e.wi, life: 1e9, anim: 0, cd: 20 });
     fxRing(e.x, e.y - 12, 24, '200,230,255'); blip(700, 1400, .2, .2, 'sine', e.x, e.y); return true;
   }
   if (w.kind === 'repulse') {
@@ -1989,7 +1991,7 @@ function updatePowers() {
     if (m.fly) stickDeployable(m);
     else if (++m.armT > 50) for (const t of soldiers) {
       if (t.dead || t === m.owner || !isFoe(m.owner, t)) continue;
-      if (Math.hypot(t.x - m.x, t.y - 12 - m.y) < 26) { explode(m.x, m.y - 2, 66, 1300, m.owner, 'Mina'); m.life = 0; break; }
+      if (Math.hypot(t.x - m.x, t.y - 12 - m.y) < 26) { explode(m.x, m.y - 2, 80, 20000, m.owner, 'Mina'); m.life = 0; break; }
     }
     if (--m.life <= 0) mines.splice(i, 1);
   }
@@ -2040,10 +2042,21 @@ function updatePowers() {
   // hologram clones run ahead of their owner and vanish when hit or after a few seconds
   for (let i = clones.length - 1; i >= 0; i--) {
     const c = clones[i]; c.vy = Math.min(c.vy + GRAV, 6);
-    if (solid(c.x + c.vx * 2, c.y - 8)) c.vx = 0; else c.x += c.vx;
+    if (solid(c.x + c.vx * 2, c.y - 8)) c.vx = -c.vx; else c.x += c.vx; // turns round at walls and keeps patrolling
+    if (c.cd > 0) c.cd--;
+    // decoy: face the nearest visible enemy and fire shots that look real but do no damage
+    let tg = null, td = 520;
+    for (const t of soldiers) { if (t.dead || !isFoe(c.owner, t)) continue; const d = Math.hypot(t.x - c.x, t.y - 12 - c.y); if (d < td && lineClear(c.x, c.y - 14, t.x, t.y - 12)) { td = d; tg = t; } }
+    if (tg) {
+      c.facing = tg.x >= c.x ? 1 : -1;
+      if (c.cd <= 0) {
+        const mx = c.x + c.facing * 12, my = c.y - 14, a = Math.atan2(tg.y - 12 - my, tg.x - mx) + rnd(-.06, .06);
+        bullets.push({ x: mx, y: my, sx: mx, sy: my, vx: Math.cos(a) * 22, vy: Math.sin(a) * 22, owner: c.owner, w: DECOY_W, life: 40, pcd: 0 });
+        particles.push({ t: 'flash', x: mx, y: my, life: 3, max: 3, s: 4 }); sfxShot(MP5W, mx, my); c.cd = 9 + (Math.random() * 8 | 0);
+      }
+    } else c.facing = c.vx >= 0 ? 1 : -1;
     if (!solid(c.x, c.y + 1)) c.y += c.vy; else { c.vy = 0; while (solid(c.x, c.y)) c.y--; }
     c.anim += Math.abs(c.vx) * .11;
-    if (--c.life <= 0) popClone(c);
   }
 }
 function powerFx() {
@@ -2162,6 +2175,10 @@ function potionFx(e, kind) {
 
 function hurt(t, dmg, src, wname, hx, hy, dirx, diry, quiet) {
   if (t.dead || t.protect > 0 || t.buff === 'shield') return;
+  if (t.shieldUp > 0 && src !== t && (dirx || diry)) { // energy shield: the damage came along (dirx, diry), so the attacker is the other way round
+    let da = Math.atan2(-diry, -dirx) - t.aim; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+    if (Math.abs(da) < 1.25) { for (let k = 0; k < 4; k++) particles.push({ t: 'spark', x: hx + rnd(-3, 3), y: hy + rnd(-3, 3), vx: rnd(-2, 2), vy: rnd(-2, 2), life: 10, max: 10, s: 1 }); return; }
+  }
   if (gameMode === 'ctf' && src && src !== t && src.team === t.team) return;
   if (src && src.buff === 'dmg') dmg *= 2;
   if (t.freezeT > 0) dmg *= 1.5;
@@ -2323,7 +2340,8 @@ function updateBullets() {
         if (t === b.owner || t.dead) continue;
         const [w, h] = dims(t);
         if (b.x > t.x - w / 2 - 1.5 && b.x < t.x + w / 2 + 1.5 && b.y > t.y - h - 1.5 && b.y < t.y + 1) {
-          if (kind === 'cryo') chillHit(t, b);
+          if (b.w.decoy) impactFx(b.x, b.y, b.vx, b.vy); // hologram clone shots: all show, no damage
+          else if (kind === 'cryo') chillHit(t, b);
           else if (kind === 'flame') flameHit(t, b);
           else if (kind === 'blackhole') openHole(b.x, b.y, b.owner);
           else if (b.w.explosive) explode(b.x, b.y, b.w.explosive.r, b.w.mult, b.owner, b.w.short);
