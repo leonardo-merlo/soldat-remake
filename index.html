@@ -2038,8 +2038,10 @@ function updatePowers() {
     const D = dragons[i], o = D.owner; D.flap += .4;
     let best = null, bd = 520;
     for (const t of soldiers) { if (t.dead || !isFoe(o, t)) continue; const d = Math.hypot(t.x - D.x, t.y - 12 - D.y); if (d < bd) { bd = d; best = t; } }
-    let gx = o.x + o.facing * -34, gy = o.y - 52;
-    if (best) { gx = best.x + (D.x < best.x ? -120 : 120); gy = best.y - 70; }
+    // cruises high above, and only comes down when the ceiling is low; keeps its distance from the enemy so the mouth can reach
+    const hover = (x, y, H) => { let h = 0; while (h < H && !solid(x, y - h - 12)) h += 10; return y - Math.max(36, Math.min(H, h - 20)); };
+    let gx = o.x + o.facing * -34, gy = hover(o.x, o.y - 12, 120);
+    if (best) { gx = best.x + (D.x < best.x ? -210 : 210); gy = hover(best.x, best.y - 12, 150); }
     const dx = gx - D.x, dy = gy - D.y, dd = Math.hypot(dx, dy) || 1;
     D.vx += dx / dd * .22; D.vy += dy / dd * .22; D.vx *= .94; D.vy *= .94;
     const sp = Math.hypot(D.vx, D.vy); if (sp > 3.4) { D.vx *= 3.4 / sp; D.vy *= 3.4 / sp; }
@@ -2047,7 +2049,7 @@ function updatePowers() {
     D.x += D.vx; D.y += D.vy; if (Math.abs(D.vx) > .3) D.face = Math.sign(D.vx);
     if (best) D.face = best.x >= D.x ? 1 : -1;
     if (D.cd > 0) D.cd--;
-    if (best && bd < 380 && D.cd <= 0 && D.burst <= 0) D.burst = D.ice ? 22 : 14;
+    if (best && bd < 460 && D.cd <= 0 && D.burst <= 0) D.burst = D.ice ? 22 : 14;
     if (D.burst > 0) {
       D.burst--; if ((D.ice || D.burst % 2 === 0) && best) {
         const a = Math.atan2(best.y - 12 - D.y, best.x - D.x) + rnd(-.06, .06), hx = D.x + D.face * (D.ice ? 67 : 41), hy = D.y + 5, sp = D.ice ? 11.5 : 8.5; // the mouth of the big painted dragon
@@ -2086,7 +2088,7 @@ function powerFx() {
   for (const m of meteors) { particles.push({ t: 'fire', x: m.x - m.vx * 2, y: m.y - m.vy * 2, vx: -m.vx * .1, vy: -m.vy * .1, life: 18, max: 18, s: 4 }); if (tick % 2 === 0) particles.push({ t: 'smoke', x: m.x - m.vx * 3, y: m.y - m.vy * 3, vx: 0, vy: 0, life: 30, max: 30, s: 3 }); }
   for (const D of dragons) {
     // embers off the body, and a constant smoulder at the mouth (the real jets are the flame bullets it fires)
-    if (tick % 3 === 0) particles.push({ t: 'fire', x: D.x - D.face * 30, y: D.y + 4, vx: rnd(-.2, .2), vy: rnd(-.5, -.1), life: 14, max: 14, s: 3 });
+    if (tick % 3 === 0) particles.push(D.ice ? { t: 'snow', x: D.x - D.face * 30, y: D.y + 4, vx: rnd(-.2, .2), vy: rnd(.1, .5), life: 18, max: 18, s: rnd(1.2, 2.2) } : { t: 'fire', x: D.x - D.face * 30, y: D.y + 4, vx: rnd(-.2, .2), vy: rnd(-.5, -.1), life: 14, max: 14, s: 3 });
     if (tick % 2 === 0) particles.push(D.ice ? { t: 'snow', x: D.x + D.face * 68, y: D.y + 5 + rnd(-1, 1), vx: D.face * rnd(.6, 1.8), vy: rnd(-.6, .1), life: rnd(14, 26), max: 26, s: rnd(1.4, 3) } : { t: 'fire', x: D.x + D.face * 44, y: D.y + 5 + rnd(-1, 1), vx: D.face * rnd(.6, 1.6), vy: rnd(-.5, .1), life: rnd(10, 18), max: 18, s: rnd(2, 3.6) });
   }
 }
