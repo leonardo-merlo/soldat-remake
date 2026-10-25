@@ -78,7 +78,7 @@
     <tr><td>F1 (segurar) / F2</td><td>Placar / minimapa</td></tr>
     <tr><td>R</td><td>Recarregar</td></tr>
     <tr><td>B (segurar)</td><td>Construtor de Muros: gira o muro. A silhueta mostra onde ele vai ficar</td></tr>
-    <tr><td>Armas de poder</td><td>Kamehameha/Sabre/Escudo: segurar o botão. Meteoros, Minhoca, Dragão, Mina, Torreta, Clone e Repulsão: um clique</td></tr>
+    <tr><td>Armas de poder</td><td>Kamehameha/Sabre/Escudo: segurar o botão. Meteoros, Minhoca, Dragão de Fogo e de Gelo, Mina, Torreta, Clone e Repulsão: um clique</td></tr>
     <tr><td>G</td><td>Bandeira: arremessa a bandeira que você carrega (para um colega ou por cima de obstáculos)</td></tr>
     <tr><td>E (segurar e soltar)</td><td>Granada: quanto mais segura, mais longe vai</td></tr>
     <tr><td>Botão esquerdo (segurar)</td><td>Laser/Gravitacional: carregar e soltar. Motosserra e Criogênico: contínuo</td></tr>
@@ -813,11 +813,12 @@ const WEAPONS = [
 { // the power arms share their boring fields
   const P = o => ({ kick: 0, mult: 0, speed: 0, spread: 0, moveAcc: 0, push: 0, mods: [1, 1, 1], auto: false, noShell: true, img: null, fire: null, cx: .3, cy: .5, fx: 0, fy: 0, ...o });
   WEAPONS.push(
-    P({ name: 'Kamehameha', short: 'Kamehameha', delay: 30, mag: 2, reload: 240, kind: 'kame', charge: 120 }),
+    P({ name: 'Kamehameha', short: 'Kamehameha', delay: 30, mag: 2, reload: 240, kind: 'kame', charge: 120, img: 'ki-orb', cx: .5, cy: .5, reach: 20 }),
     P({ name: 'Sabre de Luz', short: 'Sabre', delay: 10, mag: 240, reload: 180, kind: 'saber', img: 'saber', cx: .3, cy: .5 }),
     P({ name: 'Chuva de Meteoros', short: 'Meteoros', delay: 30, mag: 1, reload: 480, kind: 'meteor', img: 'meteor-launcher', cx: .2, cy: .72 }),
     P({ name: 'Buraco de Minhoca', short: 'Minhoca', delay: 20, mag: 4, reload: 200, kind: 'wormhole', img: 'wormhole-gun', cx: .2, cy: .72 }),
     P({ name: 'Dragão de Fogo', short: 'Dragão', delay: 30, mag: 1, reload: 600, kind: 'dragon', img: 'phoenix-staff', cx: .3, cy: .62 }),
+    P({ name: 'Dragão de Gelo', short: 'Dragão Gelo', delay: 30, mag: 1, reload: 600, kind: 'icedragon', img: 'ice-staff', cx: .3, cy: .62 }),
     P({ name: 'Mina de Proximidade', short: 'Mina', delay: 20, mag: 3, reload: 300, kind: 'mine', img: 'mine', cx: .5, cy: .7, scale: .55, upright: true }),
     P({ name: 'Torreta Portátil', short: 'Torreta', delay: 30, mag: 2, reload: 420, kind: 'turret', img: 'turret', cx: .5, cy: .8, scale: .42, upright: true }),
     P({ name: 'Escudo de Energia', short: 'Escudo', delay: 10, mag: 300, reload: 200, kind: 'shield', img: 'shield-emitter', cx: .2, cy: .5, scale: .8 }),
@@ -870,6 +871,7 @@ if (!ARENA) {
 }
 if (VOLCANO) loadImage('dead-tree', ['assets/props/dead-tree.png'], 1);
 loadImage('phoenix', ['assets/props/phoenix.png'], 1);
+loadImage('ice-dragon', ['assets/props/ice-dragon.png'], 1);
 loadImage('chest', [`assets/props/chest-${MAP_ID}.png`], 1);
 for (const k of ['pine-large', 'pine-medium', 'pine-small', 'lamp', 'crate', 'rock-small', 'sandbags', 'barrel', 'fence', 'signpost', 'tent', 'watchtower', 'lantern-hang', 'pk-health', 'pk-ammo', 'pk-grenades', 'pk-vest', 'pk-fuel', 'pk-potion']) loadImage(k, [`assets/props/${k}.png`]);
 for (let i = 1; i <= 16; i++) loadImage('explode' + i, [`assets/fx/explode${i}.png`, `assets/original/fx/explode${i}.png`]);
@@ -1019,7 +1021,7 @@ function shoulder(e) {
   return { x: e.x, y: e.y - 16 * k };
 }
 const HAND = 4; // grip distance from the shoulder along the aim line
-function gunLength(w) { const img = IMG[w.img]; return ready(img) ? img.naturalWidth * PX * (w.scale || 1) * (1 - w.cx) : 20; }
+function gunLength(w) { if (w.reach != null) return w.reach; const img = IMG[w.img]; return ready(img) ? img.naturalWidth * PX * (w.scale || 1) * (1 - w.cx) : 20; }
 
 function moveSoldier(e) {
   const [w, h] = dims(e);
@@ -1793,11 +1795,11 @@ function flameHit(t, b) {
 // ================= Power arms: kamehameha, light saber, meteor shower, pocket wormhole, fire dragon, proximity mine, portable turret, energy shield, hologram clone, repulsion wave =================
 // Host-owned like everything that changes the match; guests get the entities in the snapshot and draw them locally.
 const meteors = [], strikes = [], mines = [], turrets = [], dragons = [], clones = [];
-const GADGETS = { kame: ['#2a4fa8', '#8fd6ff'], saber: ['#4a4f5c', '#9dff9d'], meteor: ['#5a2a14', '#ff8a3a'], wormhole: ['#3a2466', '#c9a0ff'], dragon: ['#5a1a14', '#ff6a3a'], mine: ['#33404a', '#ff5a5a'], turret: ['#3a4a3a', '#9dd07a'], shield: ['#1d3a5a', '#7fd8ff'], clone: ['#44506a', '#d0e6ff'], repulse: ['#4a3a66', '#ffe08a'] };
-const POWER_SHOT = { meteor: 1, wormhole: 1, dragon: 1, mine: 1, turret: 1, clone: 1, repulse: 1 }; // one press, one effect: they go through shoot() and the normal ammo/reload
+const GADGETS = { kame: ['#2a4fa8', '#8fd6ff'], saber: ['#4a4f5c', '#9dff9d'], meteor: ['#5a2a14', '#ff8a3a'], wormhole: ['#3a2466', '#c9a0ff'], dragon: ['#5a1a14', '#ff6a3a'], icedragon: ['#1d3a5a', '#9fe6ff'], mine: ['#33404a', '#ff5a5a'], turret: ['#3a4a3a', '#9dd07a'], shield: ['#1d3a5a', '#7fd8ff'], clone: ['#44506a', '#d0e6ff'], repulse: ['#4a3a66', '#ffe08a'] };
+const POWER_SHOT = { meteor: 1, wormhole: 1, dragon: 1, icedragon: 1, mine: 1, turret: 1, clone: 1, repulse: 1 }; // one press, one effect: they go through shoot() and the normal ammo/reload
 const isFoe = (owner, t) => t !== owner && !(gameMode === 'ctf' && owner && t.team === owner.team);
 const DECOY_W = (() => { const m = WEAPONS.find(w => w.short === 'MP5'); return Object.assign({}, m, { mult: 0, push: 0, kick: 0, decoy: true }); })(); // looks like an MP5 round, hurts nobody
-const MP5W = WEAPONS.find(w => w.short === 'MP5'), FLAMEW = WEAPONS.find(w => w.kind === 'flame');
+const MP5W = WEAPONS.find(w => w.short === 'MP5'), FLAMEW = WEAPONS.find(w => w.kind === 'flame'), CRYOW = WEAPONS.find(w => w.kind === 'cryo');
 function fxRing(x, y, s, col) { particles.push({ t: 'ring', x, y, life: 14, max: 14, s, col }); emit({ t: 'rg', x, y, s, col }); }
 function segDist(px, py, S) { const dx = S.x1 - S.x0, dy = S.y1 - S.y0, t = clamp(((px - S.x0) * dx + (py - S.y0) * dy) / (dx * dx + dy * dy || 1), 0, 1); return Math.hypot(px - (S.x0 + dx * t), py - (S.y0 + dy * t)); }
 // every turret / dragon / clone / mine, as { x, y (centre), r (hit radius), hit(dmg) }
@@ -1930,10 +1932,11 @@ function powerShoot(e, w) {
     e.x = e.ax; e.y = e.ay; e.vx *= .3; e.vy *= .3; e.tx = e.x; e.ty = e.y; e.aT = 0; unstick(e);
     fxRing(e.x, e.y - 12, 30, '190,150,255'); blip(1200, 300, .3, .3, 'sine', e.x, e.y); return true;
   }
-  if (w.kind === 'dragon') {
-    for (let i = dragons.length - 1; i >= 0; i--) if (dragons[i].owner === e) dragons.splice(i, 1);
-    dragons.push({ x: s.x + c * 14, y: s.y + sn * 14 - 8, vx: c * 2, vy: -1, owner: e, team: e.team, hp: 90, life: 960, cd: 40, burst: 0, face: c >= 0 ? 1 : -1, flap: 0 });
-    fxRing(s.x + c * 14, s.y + sn * 14, 30, '255,140,50'); noise(.5, 400, volAt(s.x, s.y) * .8, 'lowpass'); blip(180, 70, .5, .35, 'sawtooth', s.x, s.y); return true;
+  if (w.kind === 'dragon' || w.kind === 'icedragon') {
+    const ice = w.kind === 'icedragon';
+    for (let i = dragons.length - 1; i >= 0; i--) if (dragons[i].owner === e && !!dragons[i].ice === ice) dragons.splice(i, 1);
+    dragons.push({ x: s.x + c * 14, y: s.y + sn * 14 - 8, vx: c * 2, vy: -1, owner: e, team: e.team, hp: 90, life: 960, cd: 40, burst: 0, face: c >= 0 ? 1 : -1, flap: 0, ice });
+    fxRing(s.x + c * 14, s.y + sn * 14, 30, ice ? '140,210,255' : '255,140,50'); noise(.5, 400, volAt(s.x, s.y) * .8, 'lowpass'); blip(180, 70, .5, .35, 'sawtooth', s.x, s.y); return true;
   }
   if (w.kind === 'mine' || w.kind === 'turret') {
     const list = w.kind === 'mine' ? mines : turrets, mine = w.kind === 'mine';
@@ -1945,7 +1948,8 @@ function powerShoot(e, w) {
   if (w.kind === 'clone') {
     while (clones.filter(m => m.owner === e).length >= 2) clones.splice(clones.findIndex(m => m.owner === e), 1);
     const f = c >= 0 ? 1 : -1;
-    clones.push({ x: e.x, y: e.y, vx: f * 1.9, vy: 0, facing: f, owner: e, team: e.team, wi: e.wi, life: 1200, anim: 0, cd: 20 });
+    let cw = e.sec; if (!WEAPONS[cw] || WEAPONS[cw].kind === 'clone') cw = e.lastWi; if (!WEAPONS[cw] || WEAPONS[cw].kind === 'clone') cw = 2; // the clone holds your other weapon, never the projector
+    clones.push({ x: e.x, y: e.y, vx: f * 1.9, vy: 0, facing: f, owner: e, team: e.team, wi: cw, life: 1200, anim: 0, cd: 20 });
     fxRing(e.x, e.y - 12, 24, '200,230,255'); blip(700, 1400, .2, .2, 'sine', e.x, e.y); return true;
   }
   if (w.kind === 'repulse') {
@@ -2042,15 +2046,15 @@ function updatePowers() {
     D.x += D.vx; D.y += D.vy; if (Math.abs(D.vx) > .3) D.face = Math.sign(D.vx);
     if (best) D.face = best.x >= D.x ? 1 : -1;
     if (D.cd > 0) D.cd--;
-    if (best && bd < 380 && D.cd <= 0 && D.burst <= 0) D.burst = 14;
+    if (best && bd < 380 && D.cd <= 0 && D.burst <= 0) D.burst = D.ice ? 22 : 14;
     if (D.burst > 0) {
-      D.burst--; if (D.burst % 2 === 0 && best) {
-        const a = Math.atan2(best.y - 12 - D.y, best.x - D.x) + rnd(-.06, .06), hx = D.x + D.face * 41, hy = D.y + 5; // the mouth of the big painted dragon
-        bullets.push({ x: hx, y: hy, sx: hx, sy: hy, vx: Math.cos(a) * 8.5, vy: Math.sin(a) * 8.5, owner: o, w: FLAMEW, life: 34, pcd: 0 });
+      D.burst--; if ((D.ice || D.burst % 2 === 0) && best) {
+        const a = Math.atan2(best.y - 12 - D.y, best.x - D.x) + rnd(-.06, .06), hx = D.x + D.face * (D.ice ? 67 : 41), hy = D.y + 5, sp = D.ice ? 11.5 : 8.5; // the mouth of the big painted dragon
+        bullets.push({ x: hx, y: hy, sx: hx, sy: hy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, owner: o, w: D.ice ? CRYOW : FLAMEW, life: D.ice ? 42 : 34, pcd: 0 });
       }
       if (D.burst === 0) D.cd = 70;
     }
-    if (--D.life <= 0 || o.dead) { dragons.splice(i, 1); fxRing(D.x, D.y, 28, '255,140,50'); }
+    if (--D.life <= 0 || o.dead) { dragons.splice(i, 1); fxRing(D.x, D.y, 28, D.ice ? '140,210,255' : '255,140,50'); }
   }
   // hologram clones run ahead of their owner and vanish when hit or after a few seconds
   for (let i = clones.length - 1; i >= 0; i--) {
@@ -2082,7 +2086,7 @@ function powerFx() {
   for (const D of dragons) {
     // embers off the body, and a constant smoulder at the mouth (the real jets are the flame bullets it fires)
     if (tick % 3 === 0) particles.push({ t: 'fire', x: D.x - D.face * 30, y: D.y + 4, vx: rnd(-.2, .2), vy: rnd(-.5, -.1), life: 14, max: 14, s: 3 });
-    if (tick % 2 === 0) particles.push({ t: 'fire', x: D.x + D.face * 44, y: D.y + 5 + rnd(-1, 1), vx: D.face * rnd(.6, 1.6), vy: rnd(-.5, .1), life: rnd(10, 18), max: 18, s: rnd(2, 3.6) });
+    if (tick % 2 === 0) particles.push(D.ice ? { t: 'snow', x: D.x + D.face * 68, y: D.y + 5 + rnd(-1, 1), vx: D.face * rnd(.6, 1.8), vy: rnd(-.6, .1), life: rnd(14, 26), max: 26, s: rnd(1.4, 3) } : { t: 'fire', x: D.x + D.face * 44, y: D.y + 5 + rnd(-1, 1), vx: D.face * rnd(.6, 1.6), vy: rnd(-.5, .1), life: rnd(10, 18), max: 18, s: rnd(2, 3.6) });
   }
 }
 
@@ -2093,38 +2097,40 @@ function cloneView(c) {
     gCharge: -1, throwT: 0, hitFlash: 0, flashT: 0, protect: 0, freezeT: 0, chill: 0, buff: '', burnT: 0, dead: false, wi: c.wi, chargeT: 0, beamT: 0, slideT: 0 });
   return f;
 }
-// the phoenix is one painted picture (assets/props/phoenix.png); to make it fly, the two wings are cut out of it once and drawn
-// separately, rotated around their shoulders every frame, over the body with the wings removed
-let PHX = null;
-const PHX_WINGS = {
-  front: [[22, 6], [48, 2], [80, 5], [112, 10], [120, 16], [115, 30], [114, 43], [104, 51], [94, 50], [84, 47], [76, 45], [66, 52], [64, 42], [60, 39], [50, 33], [33, 30], [48, 19], [32, 12]],
-  back: [[112, 34], [128, 25], [148, 20], [166, 24], [148, 30], [138, 37], [128, 40], [118, 43]],
+// each dragon is one painted picture (assets/props/phoenix.png = fire, ice-dragon.png = ice); to make it fly, the two wings are cut out once and
+// drawn separately, rotated around their shoulders every frame, over the body with the wings removed. Coordinates are in a 220 px wide sprite.
+const DRAGON_KINDS = {
+  fire: { img: 'phoenix', centre: [105, 48], pf: [112, 43], pb: [118, 43], cutFlame: true,
+    front: [[22, 6], [48, 2], [80, 5], [112, 10], [120, 16], [115, 30], [114, 43], [104, 51], [94, 50], [84, 47], [76, 45], [66, 52], [64, 42], [60, 39], [50, 33], [33, 30], [48, 19], [32, 12]],
+    back: [[112, 34], [128, 25], [148, 20], [166, 24], [148, 30], [138, 37], [128, 40], [118, 43]] },
+  ice: { img: 'ice-dragon', centre: [110, 52], pf: [136, 46], pb: [140, 45], cutFlame: false,
+    front: [[34, 13], [60, 2], [84, 1], [112, 4], [122, 11], [136, 13], [147, 22], [139, 27], [138, 43], [131, 52], [120, 54], [108, 52], [94, 50], [85, 62], [82, 50], [84, 38], [70, 30], [51, 43], [60, 24]],
+    back: [[138, 43], [152, 34], [166, 27], [182, 24], [197, 30], [188, 32], [180, 38], [168, 43], [156, 47], [142, 47]] },
 };
-function phoenixParts() {
-  if (PHX) return PHX;
-  const im = IMG.phoenix; if (!ready(im)) return null;
+const DRAGON_PARTS = {};
+function dragonParts(kind) {
+  if (DRAGON_PARTS[kind]) return DRAGON_PARTS[kind];
+  const C = DRAGON_KINDS[kind], im = IMG[C.img]; if (!ready(im)) return null;
   const k = im.naturalWidth / 220, path = (g, poly) => { g.beginPath(); poly.forEach(([x, y], i) => i ? g.lineTo(x * k, y * k) : g.moveTo(x * k, y * k)); g.closePath(); };
   const mk = () => { const c = mkCanvas(im.naturalWidth, im.naturalHeight); return [c, c.getContext('2d')]; };
   const [body, bg] = mk(); bg.drawImage(im, 0, 0);
   const wing = poly => { const [c, g] = mk(); path(g, poly); g.clip(); g.drawImage(im, 0, 0); bg.globalCompositeOperation = 'destination-out'; path(bg, poly); bg.fill(); return c; };
-  PHX = { body, front: wing(PHX_WINGS.front), back: wing(PHX_WINGS.back), k };
-  // the picture comes with a painted flame; take it off (everything right of the jaws, and bright yellow in the mouth) so the fire can be real
-  try {
-    const id = bg.getImageData(0, 0, body.width, body.height), d = id.data;
-    for (let y = 0; y < id.height; y++) for (let x = Math.floor(163 * k); x < id.width; x++) {
-      const i = (y * id.width + x) * 4;
-      if (x >= 176 * k || (d[i] > 200 && d[i + 1] > 140)) d[i + 3] = 0;
-    }
-    bg.putImageData(id, 0, 0);
-  } catch (err) { /* tainted canvas (file://): keep the flame */ }
-  return PHX;
+  const P = { body, front: wing(C.front), back: wing(C.back), k, C };
+  if (C.cutFlame) { // the fire dragon picture comes with a painted flame; take it off so the fire can be real
+    try {
+      const id = bg.getImageData(0, 0, body.width, body.height), d = id.data;
+      for (let y = 0; y < id.height; y++) for (let x = Math.floor(163 * k); x < id.width; x++) { const i = (y * id.width + x) * 4; if (x >= 176 * k || (d[i] > 200 && d[i + 1] > 140)) d[i + 3] = 0; }
+      bg.putImageData(id, 0, 0);
+    } catch (err) { /* tainted canvas (file://): keep the flame */ }
+  }
+  return (DRAGON_PARTS[kind] = P);
 }
-function drawPhoenix(D) {
-  const P = phoenixParts(); if (!P) return false;
-  const s = Math.sin(D.flap), lift = s * .55 + .2, k = 138 / 220 / P.k; // 138 world units wide: a big dragon
-  ctx.save(); ctx.translate(D.x, D.y + s * 1.4); ctx.scale(D.face * k, k); ctx.rotate(-.05 + s * .04); ctx.translate(-105 * P.k, -48 * P.k);
-  const flap = (cv, px, py, a) => { ctx.save(); ctx.translate(px * P.k, py * P.k); ctx.rotate(a); ctx.translate(-px * P.k, -py * P.k); ctx.drawImage(cv, 0, 0); ctx.restore(); };
-  flap(P.back, 118, 43, -lift * .8); flap(P.front, 112, 43, lift);
+function drawDragon(D) {
+  const P = dragonParts(D.ice ? 'ice' : 'fire'); if (!P) return false;
+  const C = P.C, s = Math.sin(D.flap), lift = s * .55 + .2, k = 138 / 220 / P.k; // 138 world units wide: a big dragon
+  ctx.save(); ctx.translate(D.x, D.y + s * 1.4); ctx.scale(D.face * k, k); ctx.rotate(-.05 + s * .04); ctx.translate(-C.centre[0] * P.k, -C.centre[1] * P.k);
+  const flap = (cv, [px, py], a) => { ctx.save(); ctx.translate(px * P.k, py * P.k); ctx.rotate(a); ctx.translate(-px * P.k, -py * P.k); ctx.drawImage(cv, 0, 0); ctx.restore(); };
+  flap(P.back, C.pb, -lift * .8); flap(P.front, C.pf, lift);
   ctx.drawImage(P.body, 0, 0);
   ctx.restore();
   return true;
@@ -2151,7 +2157,7 @@ function drawPowers() {
     ctx.restore();
   }
   for (const D of dragons) {
-    if (drawPhoenix(D)) continue;
+    if (drawDragon(D)) continue;
     ctx.save(); ctx.translate(D.x, D.y); ctx.scale(D.face, 1);
     const fl = Math.sin(D.flap) * 7;
     ctx.fillStyle = '#c8381e'; ctx.beginPath(); ctx.ellipse(0, 0, 9, 5, 0, 0, 7); ctx.fill();                       // body
@@ -2173,7 +2179,7 @@ function drawPowersAdditive() {
     ctx.beginPath(); ctx.moveTo(q.x - 14, q.y); ctx.lineTo(q.x + 14, q.y); ctx.moveTo(q.x, q.y - 14); ctx.lineTo(q.x, q.y + 14); ctx.stroke();
   }
   for (const m of meteors) { const g = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 20); g.addColorStop(0, 'rgba(255,200,100,.9)'); g.addColorStop(1, 'rgba(255,90,20,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(m.x, m.y, 20, 0, 7); ctx.fill(); }
-  for (const D of dragons) { const g = ctx.createRadialGradient(D.x, D.y, 0, D.x, D.y, 22); g.addColorStop(0, 'rgba(255,150,60,.3)'); g.addColorStop(1, 'rgba(255,100,30,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(D.x, D.y, 22, 0, 7); ctx.fill(); }
+  for (const D of dragons) { const g = ctx.createRadialGradient(D.x, D.y, 0, D.x, D.y, 22); g.addColorStop(0, D.ice ? 'rgba(130,210,255,.3)' : 'rgba(255,150,60,.3)'); g.addColorStop(1, D.ice ? 'rgba(80,160,255,0)' : 'rgba(255,100,30,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(D.x, D.y, 22, 0, 7); ctx.fill(); }
   for (const s of soldiers) {
     if (s.dead) continue;
     const w = WEAPONS[s.wi];
@@ -3492,8 +3498,8 @@ function drawWeaponMenu() {
     if (i === hover || i === player.wi) { ctx.fillStyle = i === hover ? 'rgba(255,210,122,.28)' : 'rgba(255,255,255,.08)'; ctx.fillRect(xx, y + 2 * k, w, row - 4 * k); }
     ctx.fillStyle = '#aab4d6'; ctx.font = `700 ${Math.round(20 * k)}px Rajdhani, sans-serif`; ctx.fillText(i < 10 ? String((i + 1) % 10) : '', xx + 8 * k, y + row / 2);
     const im = IMG[wp.img];
-    if (ready(im)) { const ih = Math.min(26 * k, row * .8), iw = im.naturalWidth * ih / im.naturalHeight; ctx.drawImage(im, xx + 34 * k, y + row / 2 - ih / 2, Math.min(iw, 118 * k), ih); }
-    else if (wp.kind === 'kame') { const og = ctx.createRadialGradient(x0 + 62 * k, y + row / 2, 0, x0 + 62 * k, y + row / 2, 14 * k); og.addColorStop(0, 'rgba(240,250,255,1)'); og.addColorStop(.4, 'rgba(110,190,255,.9)'); og.addColorStop(1, 'rgba(40,100,255,0)'); ctx.fillStyle = og; ctx.beginPath(); ctx.arc(x0 + 62 * k, y + row / 2, 14 * k, 0, 7); ctx.fill(); }
+    if (ready(im)) { let ih = Math.min(26 * k, row * .8), iw = im.naturalWidth * ih / im.naturalHeight; if (iw > 66 * k) { iw = 66 * k; ih = iw * im.naturalHeight / im.naturalWidth; } ctx.drawImage(im, xx + 34 * k, y + row / 2 - ih / 2, iw, ih); }
+    else if (wp.kind === 'kame') { const og = ctx.createRadialGradient(xx + 62 * k, y + row / 2, 0, xx + 62 * k, y + row / 2, 14 * k); og.addColorStop(0, 'rgba(240,250,255,1)'); og.addColorStop(.4, 'rgba(110,190,255,.9)'); og.addColorStop(1, 'rgba(40,100,255,0)'); ctx.fillStyle = og; ctx.beginPath(); ctx.arc(xx + 62 * k, y + row / 2, 14 * k, 0, 7); ctx.fill(); }
     else if (GADGETS[wp.kind]) { ctx.fillStyle = GADGETS[wp.kind][0]; ctx.beginPath(); ctx.roundRect(xx + 34 * k, y + row / 2 - 7 * k, 56 * k, 14 * k, 4 * k); ctx.fill(); ctx.fillStyle = GADGETS[wp.kind][1]; ctx.fillRect(xx + 40 * k, y + row / 2 - 2 * k, 30 * k, 4 * k); ctx.beginPath(); ctx.arc(xx + 82 * k, y + row / 2, 3.5 * k, 0, 7); ctx.fill(); }
     ctx.fillStyle = i === player.wi ? '#ffd27a' : '#e8ecf8'; ctx.font = `700 ${Math.round(20 * k)}px Rajdhani, sans-serif`; ctx.fillText(wp.name, xx + 160 * k, y + row / 2);
     if (i === player.wi || i === player.sec) { ctx.textAlign = 'right'; ctx.fillStyle = i === player.wi ? '#ffd27a' : '#7fd0ff'; ctx.font = `700 ${Math.round(16 * k)}px Rajdhani, sans-serif`; ctx.fillText(i === player.wi ? 'MÃO' : '2ª', xx + w - 8 * k, y + row / 2); ctx.textAlign = 'left'; }
@@ -3909,7 +3915,7 @@ function hostSend() {
     hl: holes.map(h => [r2(h.x), r2(h.y), h.life]),
     pw: [meteors.map(m => [r2(m.x), r2(m.y), r2(m.vx), r2(m.vy)]), strikes.map(q => [r2(q.x), r2(q.y), q.t]),
       mines.map(m => [r2(m.x), r2(m.y), m.fly ? 1 : 0, m.armT, r2(m.nx), r2(m.ny)]), turrets.map(t => [r2(t.x), r2(t.y), r2(t.ang), t.fly ? 1 : 0, r2(t.nx), r2(t.ny)]),
-      dragons.map(d => [r2(d.x), r2(d.y), d.face, r2(d.flap), d.owner.id]), clones.map(c => [r2(c.x), r2(c.y), c.facing, c.owner.id, c.wi, r2(c.anim), r2(c.vx)])],
+      dragons.map(d => [r2(d.x), r2(d.y), d.face, r2(d.flap), d.owner.id, d.ice ? 1 : 0]), clones.map(c => [r2(c.x), r2(c.y), c.facing, c.owner.id, c.wi, r2(c.anim), r2(c.vx)])],
     wl: walls.map(q => [r2(q.cx), r2(q.cy), r2(q.ang), Math.round(q.hp), q.life]),
     fz: fires.map(f => [r2(f.x), r2(f.y), f.w, f.life]),
     mo: molotovs.map(m => [r2(m.x), r2(m.y), r2(m.r)]),
@@ -4003,7 +4009,7 @@ function applySnapshot(m) {
     strikes.length = 0; for (const q of st) strikes.push({ x: q[0], y: q[1], t: q[2], n: 0 });
     mines.length = 0; for (const q of mn) mines.push({ x: q[0], y: q[1], fly: !!q[2], armT: q[3], nx: q[4], ny: q[5] });
     turrets.length = 0; for (const q of tu) turrets.push({ x: q[0], y: q[1], ang: q[2], fly: !!q[3], nx: q[4], ny: q[5] });
-    dragons.length = 0; for (const q of dr) dragons.push({ x: q[0], y: q[1], face: q[2], flap: q[3], owner: byOwner(q[4]) });
+    dragons.length = 0; for (const q of dr) dragons.push({ x: q[0], y: q[1], face: q[2], flap: q[3], owner: byOwner(q[4]), ice: !!q[5] });
     clones.length = 0; for (const q of cl) { const o = byOwner(q[3]); if (o) clones.push({ x: q[0], y: q[1], facing: q[2], owner: o, wi: q[4], anim: q[5], vx: q[6], vy: 0 }); }
   }
   walls.length = 0; for (const q of m.wl || []) walls.push({ cx: q[0], cy: q[1], ang: q[2], hp: q[3], life: q[4], hitT: 0 });
