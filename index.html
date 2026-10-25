@@ -29,6 +29,7 @@
   #maps{display:flex;gap:8px;margin:10px 0 0}
   #overlay #maps button{flex:1;margin:0;padding:8px;font-size:18px;background:transparent;color:#ffd27a;border:2px solid rgba(255,210,122,.5)}
   #overlay #maps button.on{background:#ffd27a;color:#0b1020;border-color:#ffd27a}
+  #fixed-rooms{display:none} /* fixed rooms switched off for now: only create-room and bot practice */
   #rooms{display:flex;gap:10px;margin:10px 0 0}
   #overlay #rooms button{flex:1;margin:0;padding:10px;font-size:20px}
   #modes{display:flex;gap:10px;margin:10px 0 0}
@@ -3962,7 +3963,7 @@ function joinRoom(code) {
 }
 // fixed rooms: the first to click hosts the code, whoever clicks next joins it. A room is whatever map and mode are selected above,
 // and the code is derived from room + map + mode, so each combination is its own room that never clashes with another.
-const ROOMS = [{ label: 'SALA 1' }];
+const ROOMS = []; // was [{ label: 'SALA 1' }]; fixed rooms are off for now
 const MAP_LABEL = { inverno: 'Inverno', vulcao: 'Vulcão', selva: 'Selva', espaco: 'Espaço' }, MODE_LABEL = { dm: 'Deathmatch', dove: 'Pomba de Ouro', ctf: 'Bandeira' };
 // one code per room, whatever is selected: the first player creates it with their map and mode, whoever enters next adopts them (the host's map id travels in the snapshot)
 const roomCodeFor = i => 'SL' + 'ABCDEFGH'[i] + 'X';
@@ -3975,7 +3976,7 @@ ROOMS.forEach((r, i) => {
 });
 refreshRooms();
 if (roomCode) $('fixed-rooms').hidden = true;
-if (new URLSearchParams(location.search).get('entrar') && !roomCode) ROOMS[0].btn.click();
+if (new URLSearchParams(location.search).get('entrar') && !roomCode && ROOMS[0]) ROOMS[0].btn.click();
 function applySnapshot(m) {
   if (m.mp && m.mp !== MAP_ID) { // the host is on another map: switch to it and come back into the room
     try { localStorage.setItem('sr-map', m.mp); } catch (err) { /* ignore */ }
