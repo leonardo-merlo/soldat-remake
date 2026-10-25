@@ -2041,7 +2041,7 @@ function updatePowers() {
     // cruises high above, and only comes down when the ceiling is low; keeps its distance from the enemy so the mouth can reach
     const hover = (x, y, H) => { let h = 0; while (h < H && !solid(x, y - h - 12)) h += 10; return y - Math.max(36, Math.min(H, h - 20)); };
     let gx = o.x + o.facing * -34, gy = hover(o.x, o.y - 12, 120);
-    if (best) { gx = best.x + (D.x < best.x ? -210 : 210); gy = hover(best.x, best.y - 12, 150); }
+    if (best) { gx = best.x + (D.x < best.x ? -250 : 250); gy = hover(best.x, best.y - 12, 150); }
     const dx = gx - D.x, dy = gy - D.y, dd = Math.hypot(dx, dy) || 1;
     D.vx += dx / dd * .22; D.vy += dy / dd * .22; D.vx *= .94; D.vy *= .94;
     const sp = Math.hypot(D.vx, D.vy); if (sp > 3.4) { D.vx *= 3.4 / sp; D.vy *= 3.4 / sp; }
@@ -2052,7 +2052,8 @@ function updatePowers() {
     if (best && bd < 460 && D.cd <= 0 && D.burst <= 0) D.burst = D.ice ? 22 : 14;
     if (D.burst > 0) {
       D.burst--; if ((D.ice || D.burst % 2 === 0) && best) {
-        const a = Math.atan2(best.y - 12 - D.y, best.x - D.x) + rnd(-.06, .06), hx = D.x + D.face * (D.ice ? 67 : 41), hy = D.y + 5, sp = D.ice ? 11.5 : 8.5; // the mouth of the big painted dragon
+        const hx = D.x + D.face * (D.ice ? 67 : 41), hy = D.y + 5, sp = D.ice ? 11.5 : 8.5; // the mouth of the big painted dragon
+        const a = Math.atan2(best.y - 14 - hy, best.x - D.face * 14 - hx) + rnd(-.04, .04); // aims at the chest, a little this side of the target: the breath was landing behind them
         bullets.push({ x: hx, y: hy, sx: hx, sy: hy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, owner: o, w: D.ice ? CRYOW : FLAMEW, life: D.ice ? 42 : 34, pcd: 0 });
       }
       if (D.burst === 0) D.cd = 70;
