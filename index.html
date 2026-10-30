@@ -2364,7 +2364,7 @@ function impactFx(x, y, vx, vy) {
   for (let k = 0; k < 3; k++) particles.push({ t: 'snow', x, y, vx: rnd(-1, 1), vy: rnd(-2, -.3), life: 40, max: 40, s: rnd(1, 2.2) });
 }
 function explode(x, y, r, mult, src, wname) {
-  boomFx(x, y, r); emit({ t: 'boom', x, y, r });
+  boomFx(x, y, r); emit({ t: 'boom', x, y, r }); carveCrater(x, y, r);
   for (const k of CRATES) if (k.alive) { const d = Math.hypot(k.x - x, k.y - 12 - y); if (d < r) damageCrate(k, mult / (d + 1)); }
   for (const q of walls.slice()) { const d = Math.hypot(q.cx - x, q.cy - y); if (d < r + WALL_L / 2) hurtWall(q, mult / (d + 1) * 3); }
   forDeployables((d, cx, cy) => { const dd = Math.hypot(cx - x, cy - y); if (dd < r && d.owner !== src) damageDeployable(d, mult / (dd + 1) * .8, src); });
@@ -2383,6 +2383,46 @@ function explode(x, y, r, mult, src, wname) {
       hurt(t, mult / (best + 1) * mod, src, wname, t.x, by, nx, ny);
     }
   }
+}
+
+// explosions dig craters: rock and wood are carved out of the mask and the baked world, concrete (and builder walls) hold.
+// Rounded inputs and no randomness in the shape, so host and guests carve the exact same pixels.
+const craters = [];
+function craterEdge(c, a) { return c.r * (.82 + .1 * Math.sin(a * 3 + c.x * .37) + .08 * Math.sin(a * 7 + c.y * .53)); }
+function carveCrater(x, y, r, quiet) {
+  const c = { x: Math.round(x), y: Math.round(y), r0: Math.round(r) };
+  c.r = Math.round(clamp(c.r0 * .3, 5, 26));
+  const x0 = Math.max(4, c.x - c.r - 1), x1 = Math.min(W - 5, c.x + c.r + 1), y0 = Math.max(0, c.y - c.r - 1), y1 = Math.min(H - 1, c.y + c.r + 1);
+  if (x0 > x1 || y0 > y1) return;
+  const cut = mkCanvas(x1 - x0 + 1, y1 - y0 + 1), cg = cut.getContext('2d'), img = cg.createImageData(cut.width, cut.height);
+  let dug = 0, rock = 0;
+  for (let py = y0; py <= y1; py++) for (let px = x0; px <= x1; px++) {
+    const i = py * W + px, m = mask[i];
+    if (m !== ROCK && m !== WOOD) continue;
+    const dx = px - c.x, dy = py - c.y;
+    if (Math.hypot(dx, dy) > craterEdge(c, Math.atan2(dy, dx))) continue;
+    mask[i] = 0; dug++; if (m === ROCK) rock++;
+    img.data[((py - y0) * cut.width + px - x0) * 4 + 3] = 255;
+  }
+  if (!dug) return;
+  cg.putImageData(img, 0, 0); c.cut = cut; c.x0 = x0; c.y0 = y0;
+  craters.push(c); paintCrater(c); miniCanvas = null;
+  for (const k of CRATES) if (Math.abs(k.x - c.x) < c.r + 14) while (k.y < H - 5 && !solid(k.x, k.y + 1) && !solid(k.x - 8, k.y + 1) && !solid(k.x + 8, k.y + 1)) k.y++; // supply chests drop into the hole
+  if (quiet) return;
+  const chip = rock * 2 > dug ? (VOLCANO ? '#3e3532' : '#687082') : '#7a5634';
+  for (let k = 0, n = Math.min(28, 6 + dug / 18); k < n; k++) particles.push({ t: 'shell', chip, x: c.x + rnd(-.6, .6) * c.r, y: c.y + rnd(-.6, .6) * c.r, vx: rnd(-3, 3), vy: rnd(-4.5, -1), life: 150, max: 150, s: rnd(1.4, 3.2), r: rnd(0, 6), vr: rnd(-.4, .4) });
+}
+// erases exactly the dug pixels from the baked world and scorches what is left around the hole
+function paintCrater(c) {
+  if (!worldCanvas) return;
+  const g = worldCanvas.getContext('2d'), R = c.r * 1.6; // the world context keeps its WS scale, so this is in world units
+  g.save();
+  g.globalCompositeOperation = 'source-atop';
+  const sc = g.createRadialGradient(c.x, c.y, c.r * .7, c.x, c.y, R);
+  sc.addColorStop(0, 'rgba(26,20,16,.65)'); sc.addColorStop(1, 'rgba(26,20,16,0)');
+  g.fillStyle = sc; g.beginPath(); g.arc(c.x, c.y, R, 0, 7); g.fill();
+  g.globalCompositeOperation = 'destination-out'; g.imageSmoothingEnabled = false; g.drawImage(c.cut, c.x0, c.y0);
+  g.restore();
 }
 
 function updateBullets() {
@@ -3131,7 +3171,7 @@ function drawWorld() {
   ctx.globalAlpha = 1;
   for (const p of particles) if (p.t === 'gun' && ready(IMG[p.img])) { const im = IMG[p.img], gw = im.naturalWidth * PX, gh = im.naturalHeight * PX; ctx.globalAlpha = Math.min(1, p.life / 60); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.drawImage(im, -p.cx * gw, -p.cy * gh, gw, gh); ctx.restore(); }
   ctx.globalAlpha = 1;
-  for (const p of particles) if (p.t === 'shell') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); if (p.wood) { ctx.globalAlpha = Math.min(1, p.life / 40); ctx.fillStyle = '#7a5634'; ctx.fillRect(-1.8, -.7, 3.6, 1.4); } else { ctx.fillStyle = '#e0c860'; ctx.fillRect(-.9, -.5, 1.8, 1); } ctx.restore(); }
+  for (const p of particles) if (p.t === 'shell') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); if (p.chip) { ctx.globalAlpha = Math.min(1, p.life / 40); ctx.fillStyle = p.chip; ctx.fillRect(-p.s / 2, -p.s * .35, p.s, p.s * .7); } else if (p.wood) { ctx.globalAlpha = Math.min(1, p.life / 40); ctx.fillStyle = '#7a5634'; ctx.fillRect(-1.8, -.7, 3.6, 1.4); } else { ctx.fillStyle = '#e0c860'; ctx.fillRect(-.9, -.5, 1.8, 1); } ctx.restore(); }
   ctx.globalAlpha = 1;
   drawLivingWorld();
   drawKnives();
@@ -3427,7 +3467,6 @@ function drawSoldier(e) {
     gunAndArms(0, -22, la, w, C, e);
   }
   if (!e.dead && (e.gCharge >= 0 || e.throwT > 0)) throwArm(e, e.stance === 'prone' ? 6 : 0, e.stance === 'crouch' ? -16 : e.stance === 'prone' ? -4 : -22, la, C);
-  if (e.hitFlash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,80,80,.35)'; ctx.fillRect(-12, -34, 24, 34); }
   if (!e.dead) {
     ctx.globalCompositeOperation = 'lighter';
     if (e.freezeT > 0) { ctx.fillStyle = 'rgba(120,200,255,.5)'; ctx.fillRect(-12, -34, 24, 34); ctx.fillStyle = 'rgba(230,250,255,.45)'; ctx.fillRect(-9, -33, 4, 26); ctx.fillRect(4, -30, 3, 20); }
@@ -3720,6 +3759,7 @@ function applyRock() {
   }
   wg.restore();
   ROCK_LAYERS = null; rockApplied = true;
+  craters.forEach(paintCrater); // the rock texture is painted late and would cover holes made before it
 }
 function applyPlanks() {
   const img = IMG['wood-planks'], g = worldCanvas.getContext('2d'), sy = 515, sh = 724 - 515;
@@ -3731,6 +3771,7 @@ function applyPlanks() {
     g.restore();
   }
   planksApplied = true;
+  craters.forEach(paintCrater);
 }
 function render() {
   if (!worldCanvas) { drawBackground(); return; }
@@ -3779,7 +3820,13 @@ function saveProfile() {
   player.name = myName; player.col = myColor; player.C = palette(myColor);
   if (bot.col === myColor) { bot.col = myColor === COLORS[1] ? COLORS[0] : COLORS[1]; bot.C = palette(bot.col); }
 }
-function startGame() { $('overlay').style.display = 'none'; running = true; if (!AC) initAudio(); else AC.resume(); }
+// a guest joining mid-match digs the craters the host already has (once the terrain exists)
+function digOld(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  const dig = () => { for (const q of list) carveCrater(q[0], q[1], q[2], true); };
+  if (worldCanvas) dig(); else { const prev = afterWorld; afterWorld = () => { if (prev) prev(); dig(); }; }
+}
+function startGame() { $('overlay').style.display = 'none'; running = true; gameStarted = true; if (!AC) initAudio(); else AC.resume(); }
 function roomStatus(html) { $('room').hidden = false; $('room').innerHTML = html; }
 const roomCode = (new URLSearchParams(location.search).get('sala') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
 if (roomCode) {
@@ -3824,7 +3871,12 @@ function applyModeNow() {
   }
 }
 $('play').onclick = () => { saveProfile(); applyMode(); startGame(); };
-addEventListener('keydown', e => { if (e.code === 'Escape' && netMode === 'solo') { running = false; $('overlay').style.display = 'flex'; } });
+let gameStarted = false;
+addEventListener('keydown', e => {
+  if (e.code !== 'Escape' || netMode !== 'solo') return;
+  if (running) { running = false; $('overlay').style.display = 'flex'; }
+  else if (gameStarted) startGame(); // second Esc resumes where you were, without respawning
+});
 
 // ================= Online (PeerJS, host-authoritative) =================
 // The host runs the whole simulation; guests send inputs every tick and get a snapshot every 2 ticks,
@@ -3879,7 +3931,7 @@ function onHostData(conn, m) {
     const gsp = spawnXY(1 + guestN), g = makeSoldier(name, col, gsp[0], gsp[1], false, 'g' + (++guestN));
     g.remote = true; unstick(g); soldiers.push(g); conn.soldier = g; conns.push(conn);
     if (gameMode === 'ctf') { setTeam(g, balancedTeam()); ctfPlace(g); }
-    conn.send({ t: 'welcome', id: g.id });
+    conn.send({ t: 'welcome', id: g.id, cr: craters.map(c => [c.x, c.y, c.r0]) });
     bigMsg = { text: `${name} entrou`, t: 180 }; emit({ t: 'msg', text: `${name} entrou` });
   } else if (m.t === 'in' && conn.soldier) {
     const g = conn.soldier, a = g.acc || (g.acc = {}), i = m.i || {};
@@ -3955,7 +4007,7 @@ function joinRoom(code) {
   me.on('open', () => {
     hostConn = me.connect(PEER_PREFIX + code, { reliable: true });
     hostConn.on('open', () => hostConn.send({ t: 'hello', name: myName, col: myColor }));
-    hostConn.on('data', m => { if (m && m.t === 'welcome') { done = true; clearTimeout(timer); joinTries = 0; myId = m.id; startGame(); } else if (m && m.t === 's') applySnapshot(m); });
+    hostConn.on('data', m => { if (m && m.t === 'welcome') { done = true; clearTimeout(timer); joinTries = 0; myId = m.id; digOld(m.cr); startGame(); } else if (m && m.t === 's') applySnapshot(m); });
     hostConn.on('close', () => { if (!done) { giveUp('conexão fechada'); return; } running = false; $('overlay').style.display = 'flex'; roomStatus('A conexão com a sala caiu. Recarregue a página para entrar de novo.'); });
   });
   me.on('error', err => {
@@ -4034,7 +4086,7 @@ function applySnapshot(m) {
     if (ev.t === 'shot') { const e = byId(ev.id); if (e) shotFx(e, WEAPONS[ev.wi], ev.mx, ev.my, ev.sx, ev.sy, ev.aim); }
     else if (ev.t === 'hit') hitFx(byId(ev.tgt), byId(ev.src), ev.x, ev.y, ev.dx, ev.dy, ev.q === 2 ? 'fire' : ev.q);
     else if (ev.t === 'kill') killFx(byId(ev.tgt), byId(ev.src), ev.wname, ev.x, ev.y, ev.dx);
-    else if (ev.t === 'boom') boomFx(ev.x, ev.y, ev.r);
+    else if (ev.t === 'boom') { boomFx(ev.x, ev.y, ev.r); carveCrater(ev.x, ev.y, ev.r); }
     else if (ev.t === 'imp') impactFx(ev.x, ev.y, ev.vx, ev.vy);
     else if (ev.t === 'msg') bigMsg = { text: ev.text, t: 180 };
     else if (ev.t === 'ice') iceFx(ev.x, ev.y);
